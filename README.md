@@ -41,8 +41,6 @@ Pastikan file ikon ada di `public/`:
 - `public/icon-512.png`
 Convert dari `public/images/conan.jpg` ke PNG biar gak kepotong pas `maskable`.
 
-Manifest sudah ada di `public/manifest.json`.
-
 #### 3. Deploy ke Vercel (PWA Live)
 
 > *PENTING - Cara Login Vercel:*
