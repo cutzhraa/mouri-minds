@@ -1,16 +1,31 @@
-# React + Vite
+# 🕵️‍♂️ Mouri Minds
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> Platform pembelajaran bahasa Jepang interaktif (Hiragana, Kosakata, dan Kuis) dengan pendekatan ala detektif yang seru dan menyenangkan! Dibangun menggunakan **React.js**, **Vite**, **Tailwind CSS**, dan **Supabase**.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ✨ Fitur Utama
 
-## React Compiler
+- **📚 Flashcard Interaktif**: Belajar huruf Hiragana/kosakata lengkap dengan pelafalan suara asli bahasa Jepang (`SpeechSynthesis API`), indikator kartu, fitur balik kartu (*flip*), serta dukungan *swipe gesture* untuk perangkat mobile.
+- **✍️ Latihan Menulis (Kuas)**: Fitur kanvas interaktif yang dilengkapi garis putus-putus dan badge nomor urut goresan (*stroke order*) agar mudah diikuti pengguna saat latihan menulis.
+- **⚡ Kuis Sesi Bertahap**: Sistem kuis acak per sesi dengan batas kelulusan tertentu, lengkap dengan perolehan lencana (*badge*) prestasi dan tombol navigasi sesi berikutnya.
+- **🔊 Audio Integrasi**: Fitur pengucapan otomatis untuk membantu melatih pendengaran (*listening*).
+- **📱 Responsive Design**: Dioptimalkan secara khusus agar nyaman digunakan di berbagai ukuran layar, baik perangkat mobile (Android/iOS) maupun desktop.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the ESLint configuration
+## 🛠️ Teknologi yang Digunakan
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Frontend**: React.js, Vite, Tailwind CSS
+- **Database & Backend**: Supabase
+- **Fitur Browser**: Web Speech API (Text-to-Speech), HTML5 Canvas
+
+---
+
+## 🚀 Memulai Proyek (Installation & Setup)
+
+Ikuti langkah-langkah di bawah ini untuk menjalankan project secara lokal di komputermu:
+
+1. **Clone repository ini:**
+   ```bash
+   git clone [https://github.com/username/mouri-minds.git](https://github.com/username/mouri-minds.git)
