@@ -12,6 +12,7 @@ export default function ConversationModule({ onBack }) {
   const [quizIndex, setQuizIndex] = useState(0)
   const [quizFinished, setQuizFinished] = useState(false)
   const [quizSession, setQuizSession] = useState(0)
+  const [quizMode, setQuizMode] = useState(null) // null = pilih mode, 'visual' = tebak arti, 'audio' = tebak suara
   const [shuffledQuizList, setShuffledQuizList] = useState([])
   const [shuffledOptions, setShuffledOptions] = useState([])
   const touchStartX = useRef(0)
@@ -19,11 +20,9 @@ export default function ConversationModule({ onBack }) {
 
   useEffect(() => { fetchConversations() }, [])
 
-  // Fungsi fetch dengan dukungan Offline Cache (localStorage) untuk Conversation
   const fetchConversations = async () => {
     setLoading(true)
 
-    // 1. Jika perangkat terdeteksi offline, langsung ambil data dari memori lokal HP
     if (!navigator.onLine) {
       const cachedData = localStorage.getItem('conversation_vocab_cache')
       if (cachedData) {
@@ -35,7 +34,6 @@ export default function ConversationModule({ onBack }) {
       return
     }
 
-    // 2. Jika online, ambil data dari Supabase
     try {
       const { data, error } = await supabase
         .from('vocabulary')
@@ -47,12 +45,10 @@ export default function ConversationModule({ onBack }) {
 
       if (data) {
         setVocabList(data)
-        // Simpan salinan data ke localStorage sebagai cadangan offline
         localStorage.setItem('conversation_vocab_cache', JSON.stringify(data))
       }
     } catch (err) {
       console.warn("Gagal terhubung ke server (Fetch Failed), memuat data offline...", err)
-      // Fallback jika terjadi kesalahan jaringan secara mendadak
       const cachedData = localStorage.getItem('conversation_vocab_cache')
       if (cachedData) {
         setVocabList(JSON.parse(cachedData))
@@ -74,9 +70,9 @@ export default function ConversationModule({ onBack }) {
 
   useEffect(() => {
     if (shuffledQuizList.length > 0 && quizIndex < shuffledQuizList.length) {
-      const correct = shuffledQuizList[quizIndex].meaning_id
-      const others = vocabList.filter(i => i.meaning_id !== correct).map(i => i.meaning_id).sort(() => Math.random() - 0.5).slice(0, 3)
-      setShuffledOptions([...others, correct].sort(() => Math.random() - 0.5))
+      const currentItem = shuffledQuizList[quizIndex]
+      const others = vocabList.filter(i => i.id !== currentItem.id).sort(() => Math.random() - 0.5).slice(0, 3)
+      setShuffledOptions([...others, currentItem].sort(() => Math.random() - 0.5))
     }
   }, [quizIndex, shuffledQuizList, vocabList])
 
@@ -121,6 +117,18 @@ export default function ConversationModule({ onBack }) {
     touchStartX.current = 0; touchEndX.current = 0
   }
 
+  const handleAnswer = (selectedOpt) => {
+    const currentQuizItem = shuffledQuizList[quizIndex]
+    if (selectedOpt.id === currentQuizItem.id) {
+      setQuizScore(prev => prev + 1)
+    }
+    if (quizIndex + 1 < shuffledQuizList.length) {
+      setQuizIndex(prev => prev + 1)
+    } else {
+      setQuizFinished(true)
+    }
+  }
+
   if (loading) return <div className="flex-1 flex items-center justify-center bg-slate-900 text-white text-xs">Memuat Percakapan...</div>
   if (vocabList.length === 0) return <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 text-white"><p className="text-xs">Belum ada data Percakapan.</p><button onClick={onBack} className="px-3 py-1.5 bg-indigo-600 rounded-xl text-xs">Kembali</button></div>
 
@@ -137,7 +145,7 @@ export default function ConversationModule({ onBack }) {
         </div>
         <div className="flex justify-center gap-1.5 w-full pt-[5vh] sm:pt-[12vh]">
           <button onClick={() => setActiveTab('flashcard')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'flashcard' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>📚 Dialog</button>
-          <button onClick={() => setActiveTab('quiz')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'quiz' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>⚡ Kuis {quizSession+1}</button>
+          <button onClick={() => { setActiveTab('quiz'); setQuizMode(null); }} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'quiz' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>⚡ Kuis {quizSession+1}</button>
         </div>
       </div>
 
@@ -171,16 +179,76 @@ export default function ConversationModule({ onBack }) {
 
         {activeTab === 'quiz' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
-            {!quizFinished ? (
-              <div className="w-full bg-slate-800 border border-slate-700 p-4 rounded-2xl space-y-3">
-                <div className="flex justify-between text-xs text-slate-400"><span>Sesi {quizSession+1} • {quizIndex+1}/{shuffledQuizList.length}</span><button onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)} className="text-indigo-400">🔊</button></div>
-                <div className="text-center"><p className="text-xs text-slate-400 mb-1">Pilih arti:</p><div className="text-2xl font-extrabold my-1">{shuffledQuizList[quizIndex]?.hiragana}</div><p className="text-xs text-indigo-400 font-mono">[{shuffledQuizList[quizIndex].romaji}]</p></div>
-                <div className="grid grid-cols-1 gap-2">{shuffledOptions.map((opt,i) => (<button key={i} onClick={() => { if(opt===shuffledQuizList[quizIndex].meaning_id) setQuizScore(p=>p+1); if(quizIndex+1<shuffledQuizList.length) setQuizIndex(p=>p+1); else setQuizFinished(true)}} className="py-3 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm">{opt}</button>))}</div>
+            {quizMode === null ? (
+              // MENU PEMILIHAN MODE KUIS PERCAKAPAN
+              <div className="w-full bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4 shadow-xl">
+                <h2 className="text-base font-bold text-white">🎯 Pilih Mode Kuis Percakapan</h2>
+                <div className="grid grid-cols-1 gap-3 pt-2">
+                  <button onClick={() => setQuizMode('visual')} className="py-3.5 px-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-md transition-all active:scale-95">
+                    👁️ Mode Visual (Tebak Arti Teks)
+                  </button>
+                  <button onClick={() => setQuizMode('audio')} className="py-3.5 px-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-md transition-all active:scale-95">
+                    🎧 Mode Audio (Dengar Suara Dialog)
+                  </button>
+                </div>
+              </div>
+            ) : !quizFinished ? (
+              <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-xl">
+                <div className="flex justify-between items-center text-xs text-slate-400">
+                  <button onClick={() => setQuizMode(null)} className="text-indigo-400 hover:underline">← Ganti Mode</button>
+                  <span>Sesi {quizSession+1} • {quizIndex+1}/{shuffledQuizList.length}</span>
+                </div>
+
+                {quizMode === 'visual' ? (
+                  // TAMPILAN KUIS VISUAL PERCAKAPAN
+                  <div className="space-y-3">
+                    <div className="flex justify-end">
+                      <button onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)} className="text-indigo-400 text-sm">🔊</button>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-slate-400 mb-1">Pilih arti yang tepat:</p>
+                      <div className="text-xl font-extrabold my-1">{shuffledQuizList[quizIndex]?.hiragana}</div>
+                      <p className="text-xs text-indigo-400 font-mono">[{shuffledQuizList[quizIndex].romaji}]</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      {shuffledOptions.map((opt, i) => (
+                        <button key={i} onClick={() => handleAnswer(opt)} className="py-3 px-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-xs text-white shadow-md active:scale-95 text-center">{opt.meaning_id}</button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  // TAMPILAN KUIS AUDIO PERCAKAPAN
+                  <div className="space-y-3">
+                    <div className="flex flex-col items-center justify-center py-6 bg-slate-900/80 border border-slate-700/80 rounded-xl space-y-3">
+                      <button 
+                        onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)}
+                        className="w-16 h-16 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-2xl shadow-lg transition-transform active:scale-95">
+                        🔊
+                      </button>
+                      <p className="text-xs text-slate-300 font-medium">Putar Audio Percakapan</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {shuffledOptions.map((opt, i) => (
+                        <button 
+                          key={i} 
+                          onClick={() => handleAnswer(opt)} 
+                          className="py-3 px-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-xs text-white transition-all shadow-md active:scale-95 text-center">
+                          {opt.meaning_id}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl text-center space-y-3">
-                <h2 className="text-xl font-bold text-emerald-400">Selesai! 🎉</h2><div className="text-3xl font-black text-indigo-400">{quizScore}/{shuffledQuizList.length}</div>
-                {isPassed && hasNextSession ? <button onClick={() => setQuizSession(p=>p+1)} className="w-full py-3 bg-emerald-600 rounded-xl text-sm">Lanjut →</button> : <button onClick={() => { setQuizFinished(false); setQuizScore(0); setQuizIndex(0) }} className="w-full py-3 bg-indigo-600 rounded-xl text-sm">Ulangi</button>}
+                <h2 className="text-xl font-bold text-emerald-400">Kuis Selesai! 🎉</h2>
+                <div className="text-3xl font-black text-indigo-400">{quizScore}/{shuffledQuizList.length}</div>
+                {isPassed && hasNextSession ? (
+                  <button onClick={() => setQuizSession(p => p + 1)} className="w-full py-3 bg-emerald-600 rounded-xl text-sm font-bold shadow-lg">Lanjut Sesi →</button>
+                ) : (
+                  <button onClick={() => { setQuizFinished(false); setQuizScore(0); setQuizIndex(0); setQuizMode(null); }} className="w-full py-3 bg-indigo-600 rounded-xl text-sm font-bold shadow-lg">Ulangi Kuis</button>
+                )}
               </div>
             )}
           </div>
