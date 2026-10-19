@@ -7,7 +7,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['conan.jpg', 'heiji.jpg', 'kid.jpg'], // aset gambar yang ingin di-cache
+      includeAssets: ['conan.png', 'heiji.jpg', 'kid.jpg'], // aset gambar yang ingin di-cache
       manifest: {
         name: 'MouriMinds - Learn Japanese',
         short_name: 'MouriMinds',
@@ -17,15 +17,15 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: '/images/conan.jpg',
+            src: '/images/conan.png',
             sizes: '192x192',
-            type: 'image/jpeg',
+            type: 'image/png',
             purpose: 'any maskable'
           },
           {
-            src: '/images/conan.jpg',
+            src: '/images/conan.png',
             sizes: '512x512',
-            type: 'image/jpeg',
+            type: 'image/png',
             purpose: 'any maskable'
           }
         ]

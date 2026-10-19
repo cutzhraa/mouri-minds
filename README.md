@@ -13,7 +13,7 @@ Belajar Hiragana, Katakana, Kanji, dan Percakapan + Furigana dengan cara yang se
 - **🔬 Percakapan + Furigana:** Kalimat asli campur Hiragana/Katakana/Kanji dipecah jadi chip `お | o` `げんき | genki` biar gampang hafal
 - **⚡ Kuis Sesi Bertahap:** Sistem 5 soal per sesi, harus lulus 80% baru buka sesi berikutnya + Badge System
 - **🔊 Audio Native:** Web Speech API (ja-JP) cepat & lambat
-- **📱 PWA Installable:** Bisa di-install ke layar utama Android/iOS, ikon custom `conan.jpg`
+- **📱 PWA Installable:** Bisa di-install ke layar utama Android/iOS, ikon custom `conan.png`
 
 ### 🛠️ Tech Stack
 - Frontend: React.js + Vite
@@ -39,7 +39,7 @@ npm run dev
 Pastikan file ikon ada di `public/`:
 - `public/icon-192.png`
 - `public/icon-512.png`
-Convert dari `public/images/conan.jpg` ke PNG biar gak kepotong pas `maskable`.
+Convert dari `public/images/conan.png` ke PNG biar gak kepotong pas `maskable`.
 
 #### 3. Deploy ke Vercel (PWA Live)
 
