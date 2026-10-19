@@ -21,7 +21,6 @@ export default function KanjiModule({ onBack }) {
 
   useEffect(() => { fetchKanji() }, [])
 
-  // Fungsi fetch dengan dukungan Offline Cache (localStorage) untuk Kanji
   const fetchKanji = async () => {
     setLoading(true)
 
@@ -93,7 +92,8 @@ export default function KanjiModule({ onBack }) {
     setTimeout(() => {
       const n = (currentIndex + 1) % vocabList.length
       setCurrentIndex(n)
-      speakJapanese(vocabList[n]?.romaji?.split('/')[0].trim() || vocabList[n]?.hiragana)
+      const readings = vocabList[n]?.romaji?.split('/').map(r => r.trim()) || []
+      speakJapanese(readings[0] || vocabList[n]?.hiragana)
       setSlideDirection('translate-x-full opacity-0 scale-95')
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
@@ -105,7 +105,8 @@ export default function KanjiModule({ onBack }) {
     setTimeout(() => {
       const p = (currentIndex - 1 + vocabList.length) % vocabList.length
       setCurrentIndex(p)
-      speakJapanese(vocabList[p]?.romaji?.split('/')[0].trim() || vocabList[p]?.hiragana)
+      const readings = vocabList[p]?.romaji?.split('/').map(r => r.trim()) || []
+      speakJapanese(readings[0] || vocabList[p]?.hiragana)
       setSlideDirection('translate-x-full opacity-0 scale-95')
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
@@ -121,7 +122,6 @@ export default function KanjiModule({ onBack }) {
     touchStartX.current = 0; touchEndX.current = 0
   }
 
-  // Peta Penomoran Guratan (Stroke Order) untuk Kanji N5
   const KANJI_GUIDES = {
     '日': [['①',110,45],['②',75,95],['③',135,95],['④',110,140]],
     '月': [['①',90,70],['②',115,55],['③',115,105],['④',115,155]],
@@ -208,7 +208,6 @@ export default function KanjiModule({ onBack }) {
   const isPassed = shuffledQuizList.length > 0 && quizScore >= Math.ceil(shuffledQuizList.length * 0.8)
   const hasNextSession = ((quizSession + 1) * pageSize) < vocabList.length
 
-  // Memecah romaji jika ada dua bacaan (misal: "getsu / tsuki" menjadi ["getsu", "tsuki"])
   const readings = currentVocab?.romaji ? currentVocab.romaji.split('/').map(r => r.trim()) : []
 
   return (
@@ -229,7 +228,16 @@ export default function KanjiModule({ onBack }) {
         {activeTab === 'flashcard' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-              onClick={() => { setIsFlipped(!isFlipped); speakJapanese(readings[0] || currentVocab.hiragana) }}
+              onClick={() => {
+                const nextState = !isFlipped
+                setIsFlipped(nextState)
+                // Jika sisi depan (false), baca readings[0]. Jika sisi belakang (true), baca readings[1] (jika ada), kalau tidak ada pakai readings[0].
+                if (!nextState) {
+                  speakJapanese(readings[0] || currentVocab.hiragana)
+                } else {
+                  speakJapanese(readings[1] || readings[0] || currentVocab.hiragana)
+                }
+              }}
               className={`w-full h-[380px] sm:h-[420px] cursor-pointer [perspective:1000px] transition-all duration-300 ${slideDirection}`}>
               <div className={`relative w-full h-full duration-500 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
                 
@@ -239,31 +247,17 @@ export default function KanjiModule({ onBack }) {
                   <div className="relative z-10 space-y-2">
                     <span className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-500/40">Kartu {currentIndex+1}/{vocabList.length}</span>
                     <h2 className="text-7xl sm:text-8xl font-extrabold text-white my-2">{currentVocab.hiragana}</h2>
-                    <p className="text-xs text-slate-300">✨ Klik untuk lihat bacaan | Swipe</p>
+                    <p className="text-xs text-slate-300">✨ Klik untuk balik & dengar bacaan kedua | Swipe</p>
                   </div>
                 </div>
 
-                {/* SISI BELAKANG (ARTI & PEMISAHAN CARA BACA) */}
+                {/* SISI BELAKANG (ARTI & SEMUA BACAAN) */}
                 <div className="absolute inset-0 w-full h-full rounded-2xl p-5 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)] border-2 border-emerald-500/50 bg-slate-900 overflow-hidden shadow-xl">
                   <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/kogoro.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/65"></div>
-                  <div className="relative z-10 space-y-3 w-full" onClick={(e) => e.stopPropagation()}>
-                    <h3 className="text-2xl font-extrabold text-emerald-300">{currentVocab.meaning_id}</h3>
-                    {currentVocab.meaning_en && <p className="text-xs text-emerald-200/80">"{currentVocab.meaning_en}"</p>}
-                    
-                    <div className="pt-2 border-t border-slate-700/60 space-y-2">
-                      <p className="text-[11px] text-slate-300 uppercase tracking-wider font-semibold">Cara Baca (Onyomi / Kun'yomi):</p>
-                      <div className="flex flex-wrap justify-center gap-2">
-                        {readings.map((reading, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => speakJapanese(reading)}
-                            className="px-3 py-1.5 bg-slate-800 hover:bg-indigo-600 border border-indigo-500/40 rounded-xl text-xs font-mono font-bold transition shadow flex items-center gap-1.5 text-indigo-200 hover:text-white"
-                          >
-                            <span>🔊</span> {reading}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="relative z-10 space-y-3">
+                    <h3 className="text-3xl font-extrabold text-emerald-300">{currentVocab.meaning_id}</h3>
+                    {currentVocab.meaning_en && <p className="text-sm text-emerald-200">"{currentVocab.meaning_en}"</p>}
+                    <p className="text-base text-emerald-100 font-mono pt-2 border-t border-slate-700/60">Baca: [{currentVocab.romaji}]</p>
                   </div>
                 </div>
 
