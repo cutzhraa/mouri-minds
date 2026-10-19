@@ -20,11 +20,48 @@ export default function HiraganaModule({ onBack }) {
   const touchEndX = useRef(0)
 
   useEffect(() => { fetchHiragana() }, [])
+
+  // Fungsi fetch dengan dukungan Offline Cache (localStorage)
   const fetchHiragana = async () => {
     setLoading(true)
-    const { data } = await supabase.from('vocabulary').select('*').eq('category', 'Hiragana').order('hiragana', { ascending: true })
-    setVocabList(data || [])
-    setLoading(false)
+
+    // 1. Jika perangkat terdeteksi offline, langsung ambil data dari memori HP
+    if (!navigator.onLine) {
+      const cachedData = localStorage.getItem('hiragana_vocab_cache')
+      if (cachedData) {
+        setVocabList(JSON.parse(cachedData))
+      } else {
+        alert("Kamu sedang offline dan belum ada data cache tersimpan. Harap online sekali untuk mengunduh data.")
+      }
+      setLoading(false)
+      return
+    }
+
+    // 2. Jika online, ambil dari Supabase
+    try {
+      const { data, error } = await supabase
+        .from('vocabulary')
+        .select('*')
+        .eq('category', 'Hiragana')
+        .order('hiragana', { ascending: true })
+
+      if (error) throw error
+
+      if (data) {
+        setVocabList(data)
+        // Simpan salinan data ke localStorage untuk cadangan offline
+        localStorage.setItem('hiragana_vocab_cache', JSON.stringify(data))
+      }
+    } catch (err) {
+      console.warn("Gagal terhubung ke server (Fetch Failed), memuat data offline...", err)
+      // Fallback jika terjadi kesalahan jaringan secara mendadak
+      const cachedData = localStorage.getItem('hiragana_vocab_cache')
+      if (cachedData) {
+        setVocabList(JSON.parse(cachedData))
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const pageSize = 5
@@ -36,6 +73,7 @@ export default function HiraganaModule({ onBack }) {
       setQuizIndex(0); setQuizScore(0); setQuizFinished(false)
     }
   }, [vocabList, quizSession])
+  
   useEffect(() => {
     if (shuffledQuizList.length > 0 && quizIndex < shuffledQuizList.length) {
       const correct = shuffledQuizList[quizIndex].romaji
@@ -52,6 +90,7 @@ export default function HiraganaModule({ onBack }) {
       window.speechSynthesis.speak(u)
     }
   }
+  
   const handleNextCard = () => {
     setIsFlipped(false)
     setSlideDirection('-translate-x-full opacity-0 scale-95')
@@ -62,6 +101,7 @@ export default function HiraganaModule({ onBack }) {
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
   }
+  
   const handlePrevCard = () => {
     setIsFlipped(false)
     setSlideDirection('translate-x-full opacity-0 scale-95')
@@ -72,6 +112,7 @@ export default function HiraganaModule({ onBack }) {
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
   }
+  
   const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX }
   const handleTouchMove = (e) => { touchEndX.current = e.touches[0].clientX }
   const handleTouchEnd = () => {
@@ -86,7 +127,6 @@ export default function HiraganaModule({ onBack }) {
   const drawGuide = () => {
     const canvas = canvasRef.current
     if (!canvas || vocabList.length === 0) return
-    // GANTI DISINI: 340x340 biar enak nulis
     canvas.width = 340
     canvas.height = 340
     const ctx = canvas.getContext('2d')
@@ -94,7 +134,6 @@ export default function HiraganaModule({ onBack }) {
     const current = vocabList[currentIndex]
 
     ctx.save()
-    // GANTI DISINI: 180px biar garis putusnya gede
     ctx.font = 'bold 200px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -119,7 +158,6 @@ export default function HiraganaModule({ onBack }) {
     else if (current?.hiragana === 'お') { drawBadge('①',95,70); drawBadge('②',150,45); drawBadge('③',195,145) }
 
     ctx.strokeStyle = '#0f172a'
-    // GANTI DISINI: kuas lebih tebal 18
     ctx.lineWidth = 18
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
@@ -172,7 +210,6 @@ export default function HiraganaModule({ onBack }) {
 
       <div className="flex flex-col items-center justify-center w-full pt-2 pb-6">
         {activeTab === 'flashcard' && (
-          // GEDEIN DISINI
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
               onClick={() => { setIsFlipped(!isFlipped); speakJapanese(currentVocab.hiragana) }}

@@ -20,11 +20,48 @@ export default function KanjiModule({ onBack }) {
   const touchEndX = useRef(0)
 
   useEffect(() => { fetchKanji() }, [])
+
+  // Fungsi fetch dengan dukungan Offline Cache (localStorage) untuk Kanji
   const fetchKanji = async () => {
     setLoading(true)
-    const { data } = await supabase.from('vocabulary').select('*').eq('category', 'Kanji').order('hiragana', { ascending: true })
-    setVocabList(data || [])
-    setLoading(false)
+
+    // 1. Jika perangkat terdeteksi offline, langsung ambil data dari memori lokal HP
+    if (!navigator.onLine) {
+      const cachedData = localStorage.getItem('kanji_vocab_cache')
+      if (cachedData) {
+        setVocabList(JSON.parse(cachedData))
+      } else {
+        alert("Kamu sedang offline dan belum ada data cache Kanji tersimpan. Harap online sekali untuk mengunduh data.")
+      }
+      setLoading(false)
+      return
+    }
+
+    // 2. Jika online, ambil data dari Supabase
+    try {
+      const { data, error } = await supabase
+        .from('vocabulary')
+        .select('*')
+        .eq('category', 'Kanji')
+        .order('hiragana', { ascending: true })
+
+      if (error) throw error
+
+      if (data) {
+        setVocabList(data)
+        // Simpan salinan data ke localStorage sebagai cadangan offline
+        localStorage.setItem('kanji_vocab_cache', JSON.stringify(data))
+      }
+    } catch (err) {
+      console.warn("Gagal terhubung ke server (Fetch Failed), memuat data offline...", err)
+      // Fallback jika terjadi kesalahan jaringan secara mendadak
+      const cachedData = localStorage.getItem('kanji_vocab_cache')
+      if (cachedData) {
+        setVocabList(JSON.parse(cachedData))
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const pageSize = 5
@@ -36,6 +73,7 @@ export default function KanjiModule({ onBack }) {
       setQuizIndex(0); setQuizScore(0); setQuizFinished(false)
     }
   }, [vocabList, quizSession])
+  
   useEffect(() => {
     if (shuffledQuizList.length > 0 && quizIndex < shuffledQuizList.length) {
       const correct = shuffledQuizList[quizIndex].romaji
@@ -52,6 +90,7 @@ export default function KanjiModule({ onBack }) {
       window.speechSynthesis.speak(u)
     }
   }
+  
   const handleNextCard = () => {
     setIsFlipped(false)
     setSlideDirection('-translate-x-full opacity-0 scale-95')
@@ -62,9 +101,10 @@ export default function KanjiModule({ onBack }) {
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
   }
+  
   const handlePrevCard = () => {
     setIsFlipped(false)
-    setSlideDirection('translate-x-full opacity-0 scale-95')
+    setSlideDirection('-translate-x-full opacity-0 scale-95')
     setTimeout(() => {
       const p = (currentIndex - 1 + vocabList.length) % vocabList.length
       setCurrentIndex(p); speakJapanese(vocabList[p]?.hiragana)
@@ -72,6 +112,7 @@ export default function KanjiModule({ onBack }) {
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
   }
+  
   const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX }
   const handleTouchMove = (e) => { touchEndX.current = e.touches[0].clientX }
   const handleTouchEnd = () => {
