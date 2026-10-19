@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'prompt', // <--- Ubah dari 'autoUpdate' menjadi 'prompt'
+      registerType: 'prompt',
       includeAssets: ['conan.png', 'heiji.jpg', 'kid.jpg'],
       manifest: {
         name: 'MouriMinds - Learn Japanese',
@@ -29,5 +29,8 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  build: {
+    chunkSizeWarningLimit: 1000 // Menaikkan batas limit warning ukuran chunk menjadi 1MB
+  }
 })

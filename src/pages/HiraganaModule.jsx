@@ -126,17 +126,68 @@ export default function HiraganaModule({ onBack }) {
     touchStartX.current = 0; touchEndX.current = 0
   }
 
+  // JUMLAH GURATAN RESMI & AKURAT (STROKE ORDER STANDARD)
   const HIRAGANA_STRIKE_TARGETS = {
     'あ': 3, 'い': 2, 'う': 2, 'え': 2, 'お': 3,
-    'か': 3, 'き': 3, 'く': 1, 'け': 3, 'こ': 2,
-    'さ': 3, 'し': 1, 'す': 2, 'せ': 2, 'そ': 2,
+    'か': 3, 'き': 4, 'く': 1, 'け': 3, 'こ': 2,
+    'さ': 3, 'し': 1, 'す': 2, 'せ': 2, 'そ': 1,
     'た': 4, 'ち': 2, 'つ': 1, 'て': 1, 'と': 2,
-    'な': 4, 'に': 2, 'ぬ': 2, 'ね': 2, 'の': 1,
-    'は': 3, 'ひ': 1, 'ふ': 3, 'へ': 1, 'ほ': 4,
-    'ま': 3, 'み': 2, 'む': 2, 'め': 2, 'も': 3,
+    'な': 4, 'に': 3, 'ぬ': 2, 'ね': 2, 'の': 1,
+    'は': 3, 'ひ': 1, 'ふ': 4, 'へ': 1, 'ほ': 4,
+    'ま': 3, 'み': 2, 'む': 3, 'め': 2, 'も': 3,
     'や': 3, 'ゆ': 2, 'よ': 2,
     'ら': 2, 'り': 2, 'る': 1, 'れ': 2, 'ろ': 1,
     'わ': 2, 'を': 3, 'ん': 1
+  }
+
+  // TITIK KOORDINAT BADGE PENOMORAN GURATAN YANG PRESISI & RAPI PADA KANVAS 340x340
+  const HIRAGANA_GUIDES = {
+    'あ': [['①',135,70], ['②',85,145], ['③',175,170]],
+    'い': [['①',110,75], ['②',210,85]],
+    'う': [['①',170,60], ['②',110,135]],
+    'え': [['①',140,80], ['②',80,195]],
+    'お': [['①',110,65], ['②',180,45], ['③',165,140]],
+    'か': [['①',110,65], ['②',190,55], ['③',150,165]],
+    'き': [['①',105,75], ['②',105,120], ['③',95,165], ['④',140,190]], // 4 guratan standar
+    'く': [['①',180,75]],
+    'け': [['①',105,80], ['②',185,65], ['③',140,150]],
+    'こ': [['①',130,80], ['②',110,185]],
+    'さ': [['①',110,70], ['②',180,105], ['③',120,205]],
+    'し': [['①',180,65]],
+    'す': [['①',120,70], ['②',135,135]],
+    'せ': [['①',115,75], ['②',140,150]],
+    'そ': [['①',120,65]], // 1 guratan bersambung
+    'た': [['①',110,75], ['②',190,65], ['③',130,135], ['④',130,190]],
+    'ち': [['①',120,75], ['②',120,160]],
+    'つ': [['①',160,110]],
+    'て': [['①',120,95]],
+    'と': [['①',175,70], ['②',115,145]],
+    'な': [['①',120,70], ['②',180,55], ['③',120,135], ['④',145,190]],
+    'に': [['①',115,70], ['②',155,75], ['③',195,65]], // 3 guratan
+    'ぬ': [['①',140,55], ['②',130,140]],
+    'ね': [['①',135,60], ['②',135,135]],
+    'の': [['①',155,100]],
+    'は': [['①',115,70], ['②',175,60], ['③',135,150]],
+    'ひ': [['①',165,120]],
+    'ふ': [['①',155,50], ['②',105,110], ['③',190,120], ['④',145,150]], // 4 guratan
+    'へ': [['①',150,110]],
+    'ほ': [['①',120,60], ['②',175,50], ['③',130,135], ['④',135,190]],
+    'ま': [['①',115,70], ['②',115,135], ['③',135,190]],
+    'み': [['①',130,70], ['②',135,145]],
+    'む': [['①',125,60], ['②',145,140], ['③',180,185]], // 3 guratan
+    'め': [['①',140,75], ['②',125,130]],
+    'も': [['①',140,70], ['②',125,135], ['③',185,135]],
+    'や': [['①',115,70], ['②',175,60], ['③',155,160]],
+    'ゆ': [['①',135,65], ['②',185,115]],
+    'よ': [['①',155,60], ['②',135,155]],
+    'ら': [['①',135,70], ['②',130,145]],
+    'り': [['①',120,65], ['②',175,65]],
+    'る': [['①',150,70]],
+    'れ': [['①',125,70], ['②',155,130]],
+    'ろ': [['①',145,110]],
+    'わ': [['①',125,70], ['②',165,130]], // 2 guratan
+    'を': [['①',125,65], ['②',135,115], ['③',150,185]],
+    'ん': [['①',150,110]] // 1 guratan
   }
 
   const drawGuide = () => {
@@ -145,7 +196,7 @@ export default function HiraganaModule({ onBack }) {
     canvas.width = 340
     canvas.height = 340
     const ctx = canvas.getContext('2d')
-    ctx.clearRect(0,0,canvas.width,canvas.height)
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     const current = vocabList[currentIndex]
 
     ctx.save()
@@ -158,63 +209,19 @@ export default function HiraganaModule({ onBack }) {
     ctx.strokeText(current?.hiragana, canvas.width/2, canvas.height/2)
     ctx.restore()
 
-    ctx.font = 'bold 15px sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    const drawBadge = (num,x,y) => {
-      ctx.beginPath(); ctx.arc(x,y,13,0,2*Math.PI)
+    const drawBadge = (num, x, y) => {
+      ctx.beginPath(); ctx.arc(x, y, 13, 0, 2 * Math.PI)
       ctx.fillStyle = '#dc2626'; ctx.fill()
-      ctx.fillStyle = '#fff'; ctx.fillText(num,x,y+1)
+      ctx.font = 'bold 14px sans-serif'
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(num, x, y + 1)
     }
 
     const char = current?.hiragana
-
-    if (char === 'あ') { drawBadge('①',150,55); drawBadge('②',85,135); drawBadge('③',180,180) }
-    else if (char === 'い') { drawBadge('①',105,70); drawBadge('②',210,90) }
-    else if (char === 'う') { drawBadge('①',150,60); drawBadge('②',95,125) }
-    else if (char === 'え') { drawBadge('①',95,100); drawBadge('②',75,200) }
-    else if (char === 'お') { drawBadge('①',95,70); drawBadge('②',150,45); drawBadge('③',195,145) }
-    else if (char === 'か') { drawBadge('①',95,65); drawBadge('②',180,50); drawBadge('③',145,180) }
-    else if (char === 'き') { drawBadge('①',90,80); drawBadge('②',90,140); drawBadge('③',130,200) }
-    else if (char === 'く') { drawBadge('①',170,80) }
-    else if (char === 'け') { drawBadge('①',90,85); drawBadge('②',180,75); drawBadge('③',140,165) }
-    else if (char === 'こ') { drawBadge('①',110,80); drawBadge('②',110,180) }
-    else if (char === 'さ') { drawBadge('①',100,75); drawBadge('②',160,110); drawBadge('③',110,210) }
-    else if (char === 'し') { drawBadge('①',170,60) }
-    else if (char === 'す') { drawBadge('①',110,75); drawBadge('②',140,140) }
-    else if (char === 'せ') { drawBadge('①',110,70); drawBadge('②',140,150) }
-    else if (char === 'そ') { drawBadge('①',110,65); drawBadge('②',115,160) }
-    else if (char === 'た') { drawBadge('①',100,75); drawBadge('②',180,65); drawBadge('③',120,135); drawBadge('④',130,200) }
-    else if (char === 'ち') { drawBadge('①',110,80); drawBadge('②',120,160) }
-    else if (char === 'つ') { drawBadge('①',150,110) }
-    else if (char === 'て') { drawBadge('①',110,90) }
-    else if (char === 'と') { drawBadge('①',160,70); drawBadge('②',110,150) }
-    else if (char === 'な') { drawBadge('①',110,75); drawBadge('②',165,60); drawBadge('③',110,145); drawBadge('④',140,195) }
-    else if (char === 'に') { drawBadge('①',110,75); drawBadge('②',170,65) }
-    else if (char === 'ぬ') { drawBadge('①',120,60); drawBadge('②',125,150) }
-    else if (char === 'ね') { drawBadge('①',130,60); drawBadge('②',135,140) }
-    else if (char === 'の') { drawBadge('①',140,110) }
-    else if (char === 'は') { drawBadge('①',115,75); drawBadge('②',165,65); drawBadge('③',130,160) }
-    else if (char === 'ひ') { drawBadge('①',150,120) }
-    else if (char === 'ふ') { drawBadge('①',140,55); drawBadge('②',100,105); drawBadge('③',185,115) }
-    else if (char === 'へ') { drawBadge('①',135,110) }
-    else if (char === 'ほ') { drawBadge('①',115,65); drawBadge('②',165,55); drawBadge('③',125,135); drawBadge('④',130,200) }
-    else if (char === 'ま') { drawBadge('①',110,75); drawBadge('②',110,135); drawBadge('③',130,195) }
-    else if (char === 'み') { drawBadge('①',125,75); drawBadge('②',130,150) }
-    else if (char === 'む') { drawBadge('①',110,75); drawBadge('②',140,150) }
-    else if (char === 'め') { drawBadge('①',130,75); drawBadge('②',120,135) }
-    else if (char === 'も') { drawBadge('①',130,75); drawBadge('②',125,135); drawBadge('③',175,135) }
-    else if (char === 'や') { drawBadge('①',110,75); drawBadge('②',165,65); drawBadge('③',150,160) }
-    else if (char === 'ゆ') { drawBadge('①',120,70); drawBadge('②',165,120) }
-    else if (char === 'よ') { drawBadge('①',140,65); drawBadge('②',135,160) }
-    else if (char === 'ら') { drawBadge('①',130,75); drawBadge('②',125,145) }
-    else if (char === 'り') { drawBadge('①',115,70); drawBadge('②',170,70) }
-    else if (char === 'る') { drawBadge('①',140,75) }
-    else if (char === 'れ') { drawBadge('①',115,70); drawBadge('②',140,130) }
-    else if (char === 'ろ') { drawBadge('①',130,110) }
-    else if (char === 'わ') { drawBadge('①',115,70); drawBadge('②',155,130) }
-    else if (char === 'を') { drawBadge('①',115,65); drawBadge('②',130,120); drawBadge('③',145,180) }
-    else if (char === 'ん') { drawBadge('①',135,110) }
+    const points = HIRAGANA_GUIDES[char]
+    if (points) {
+      points.forEach(([num, x, y]) => drawBadge(num, x, y))
+    }
 
     ctx.strokeStyle = '#0f172a'
     ctx.lineWidth = 18
@@ -243,8 +250,8 @@ export default function HiraganaModule({ onBack }) {
   const startDrawing = (e) => {
     if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current)
     const ctx = canvasRef.current.getContext('2d')
-    const {x,y} = getPos(e)
-    ctx.beginPath(); ctx.moveTo(x,y)
+    const {x, y} = getPos(e)
+    ctx.beginPath(); ctx.moveTo(x, y)
     setIsDrawing(true)
     setAnalysisResult(null)
   }
@@ -252,8 +259,8 @@ export default function HiraganaModule({ onBack }) {
   const draw = (e) => {
     if (!isDrawing) return
     const ctx = canvasRef.current.getContext('2d')
-    const {x,y} = getPos(e)
-    ctx.lineTo(x,y); ctx.stroke()
+    const {x, y} = getPos(e)
+    ctx.lineTo(x, y); ctx.stroke()
   }
 
   const stopDrawing = () => {
@@ -265,6 +272,7 @@ export default function HiraganaModule({ onBack }) {
     const nextStrokeCount = strokeCount + 1
     setStrokeCount(nextStrokeCount)
 
+    // Validasi ketat: User wajib menyelesaikan seluruh jumlah guratan yang diminta
     if (nextStrokeCount < requiredStrokes) return
 
     const canvas = canvasRef.current
@@ -301,19 +309,20 @@ export default function HiraganaModule({ onBack }) {
       }
     }
 
-    if (totalPixels < 180) {
+    // Validasi area coretan untuk mencegah asal coret (harus memenuhi luas minimum dan menyebar minimal di 2 kuadran)
+    if (totalPixels < 220) {
       setAnalysisResult({ passed: false })
       return
     }
 
     const boxWidth = maxX - minX
     const boxHeight = maxY - minY
-    if (boxWidth < 50 || boxHeight < 50) {
+    if (boxWidth < 60 || boxHeight < 60) {
       setAnalysisResult({ passed: false })
       return
     }
 
-    const activeQuadrants = Object.values(quadrants).filter(p => p > 30).length
+    const activeQuadrants = Object.values(quadrants).filter(p => p > 35).length
     if (activeQuadrants < 2) {
       setAnalysisResult({ passed: false })
       return
@@ -416,7 +425,6 @@ export default function HiraganaModule({ onBack }) {
               <canvas ref={canvasRef} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
                 className="touch-none block relative z-10 w-full h-full" />
 
-              {/* STEMPEL DENGAN TEMA UNGU TUA (DEEP VIOLET) */}
               {analysisResult && (
                 <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-slate-950/50 backdrop-blur-[3px] transition-all">
                   {analysisResult.passed ? (
@@ -443,7 +451,6 @@ export default function HiraganaModule({ onBack }) {
         {activeTab === 'quiz' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             {quizMode === null ? (
-              // MENU PEMILIHAN MODE KUIS
               <div className="w-full bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4 shadow-xl">
                 <h2 className="text-base font-bold text-white">🎯 Pilih Mode Investigasi Kuis</h2>
                 <div className="grid grid-cols-1 gap-3 pt-2">
@@ -463,7 +470,6 @@ export default function HiraganaModule({ onBack }) {
                 </div>
 
                 {quizMode === 'visual' ? (
-                  // TAMPILAN KUIS BIASA (VISUAL)
                   <div className="space-y-3">
                     <div className="flex justify-end"><button onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)} className="text-indigo-400 text-sm">🔊</button></div>
                     <div className="text-center"><p className="text-xs text-slate-400">Pilih romaji:</p><div className="text-6xl font-extrabold my-2">{shuffledQuizList[quizIndex]?.hiragana}</div></div>
@@ -474,7 +480,6 @@ export default function HiraganaModule({ onBack }) {
                     </div>
                   </div>
                 ) : (
-                  // TAMPILAN KUIS SUARA (AUDIO)
                   <div className="space-y-3">
                     <div className="flex flex-col items-center justify-center py-6 bg-slate-900/80 border border-slate-700/80 rounded-xl space-y-3">
                       <button 
