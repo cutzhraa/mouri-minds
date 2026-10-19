@@ -4,9 +4,23 @@ import HiraganaModule from './HiraganaModule'
 import KatakanaModule from './KatakanaModule'
 import KanjiModule from './KanjiModule'
 import ConversationModule from './ConversationModule'
+import { useRegisterSW } from 'virtual:pwa-register/react' // <--- Import PWA register hook
 
 export default function Dashboard({ session }) {
   const [currentView, setCurrentView] = useState('dashboard') // 'dashboard', 'hiragana', 'katakana', 'kanji', 'conversation'
+
+  // Hook untuk mendeteksi update PWA
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW({
+    onRegistered(r) {
+      console.log('SW Registered: ', r)
+    },
+    onRegisterError(error) {
+      console.log('SW registration error', error)
+    },
+  })
 
   const t = {
     welcome: "Selamat Datang di Mouri Minds!",
@@ -45,6 +59,27 @@ export default function Dashboard({ session }) {
           </button>
         </div>
       </nav>
+
+      {/* Banner / Tombol Update Manual */}
+      {needRefresh && (
+        <div className="bg-indigo-600 px-4 py-3 text-center flex flex-col sm:flex-row items-center justify-center gap-3 shadow-lg border-b border-indigo-500 z-40">
+          <p className="text-xs font-semibold">✨ Versi terbaru Mouri Minds tersedia! Ingin memperbarui?</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => updateServiceWorker(true)}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-xs font-bold transition shadow"
+            >
+              Update Sekarang 🚀
+            </button>
+            <button
+              onClick={() => setNeedRefresh(false)}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-semibold transition"
+            >
+              Nanti Saja
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Router */}
       <div className="flex-1 flex flex-col">
