@@ -78,7 +78,6 @@ export default function KanjiModule({ onBack }) {
     }
   }, [quizIndex, shuffledQuizList, vocabList])
 
-  // Perbaikan suara: Menggunakan bacaan romaji/kun-onyomi agar pelafalan browser pas (misal membaca 'hi' atau 'nichi' bukan karakter tunggal mentah)
   const speakJapanese = (textToSpeak) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel()
@@ -209,6 +208,9 @@ export default function KanjiModule({ onBack }) {
   const isPassed = shuffledQuizList.length > 0 && quizScore >= Math.ceil(shuffledQuizList.length * 0.8)
   const hasNextSession = ((quizSession + 1) * pageSize) < vocabList.length
 
+  // Memecah romaji jika ada dua bacaan (misal: "getsu / tsuki" menjadi ["getsu", "tsuki"])
+  const readings = currentVocab?.romaji ? currentVocab.romaji.split('/').map(r => r.trim()) : []
+
   return (
     <div className="flex-1 flex flex-col bg-slate-900 text-white px-4 py-6 max-w-md mx-auto w-full justify-start space-y-6 overflow-y-auto">
       <div className="w-full space-y-3 shrink-0">
@@ -227,24 +229,44 @@ export default function KanjiModule({ onBack }) {
         {activeTab === 'flashcard' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-              onClick={() => { setIsFlipped(!isFlipped); speakJapanese(currentVocab.romaji?.split('/')[0].trim() || currentVocab.hiragana) }}
+              onClick={() => { setIsFlipped(!isFlipped); speakJapanese(readings[0] || currentVocab.hiragana) }}
               className={`w-full h-[380px] sm:h-[420px] cursor-pointer [perspective:1000px] transition-all duration-300 ${slideDirection}`}>
               <div className={`relative w-full h-full duration-500 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
-                <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] border-2 border-indigo-500/50 bg-slate-900 overflow-hidden">
+                
+                {/* SISI DEPAN (KANJI) */}
+                <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] border-2 border-indigo-500/50 bg-slate-900 overflow-hidden shadow-xl">
                   <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/kogoro.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/60"></div>
                   <div className="relative z-10 space-y-2">
                     <span className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-500/40">Kartu {currentIndex+1}/{vocabList.length}</span>
                     <h2 className="text-7xl sm:text-8xl font-extrabold text-white my-2">{currentVocab.hiragana}</h2>
-                    <p className="text-xs text-slate-300">✨ Klik untuk balik | Swipe</p>
+                    <p className="text-xs text-slate-300">✨ Klik untuk lihat bacaan | Swipe</p>
                   </div>
                 </div>
-                <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)] border-2 border-emerald-500/50 bg-slate-900 overflow-hidden">
+
+                {/* SISI BELAKANG (ARTI & PEMISAHAN CARA BACA) */}
+                <div className="absolute inset-0 w-full h-full rounded-2xl p-5 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)] border-2 border-emerald-500/50 bg-slate-900 overflow-hidden shadow-xl">
                   <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/kogoro.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/65"></div>
-                  <div className="relative z-10 space-y-2">
-                    <h3 className="text-3xl font-extrabold text-emerald-300">{currentVocab.meaning_id}</h3>
-                    <p className="text-base text-emerald-200 font-mono">Baca: [{currentVocab.romaji}]</p>
+                  <div className="relative z-10 space-y-3 w-full" onClick={(e) => e.stopPropagation()}>
+                    <h3 className="text-2xl font-extrabold text-emerald-300">{currentVocab.meaning_id}</h3>
+                    {currentVocab.meaning_en && <p className="text-xs text-emerald-200/80">"{currentVocab.meaning_en}"</p>}
+                    
+                    <div className="pt-2 border-t border-slate-700/60 space-y-2">
+                      <p className="text-[11px] text-slate-300 uppercase tracking-wider font-semibold">Cara Baca (Onyomi / Kun'yomi):</p>
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {readings.map((reading, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => speakJapanese(reading)}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-indigo-600 border border-indigo-500/40 rounded-xl text-xs font-mono font-bold transition shadow flex items-center gap-1.5 text-indigo-200 hover:text-white"
+                          >
+                            <span>🔊</span> {reading}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
+
               </div>
             </div>
           </div>
@@ -259,7 +281,7 @@ export default function KanjiModule({ onBack }) {
             </div>
             <div className="flex gap-2 w-full">
               <button onClick={drawGuide} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm font-semibold">🔄 Hapus</button>
-              <button onClick={() => speakJapanese(currentVocab.romaji?.split('/')[0].trim() || currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button>
+              <button onClick={() => speakJapanese(readings[0] || currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button>
             </div>
           </div>
         )}
