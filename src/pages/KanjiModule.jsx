@@ -25,7 +25,6 @@ export default function KanjiModule({ onBack }) {
   const fetchKanji = async () => {
     setLoading(true)
 
-    // 1. Jika perangkat terdeteksi offline, langsung ambil data dari memori lokal HP
     if (!navigator.onLine) {
       const cachedData = localStorage.getItem('kanji_vocab_cache')
       if (cachedData) {
@@ -37,7 +36,6 @@ export default function KanjiModule({ onBack }) {
       return
     }
 
-    // 2. Jika online, ambil data dari Supabase
     try {
       const { data, error } = await supabase
         .from('vocabulary')
@@ -49,12 +47,10 @@ export default function KanjiModule({ onBack }) {
 
       if (data) {
         setVocabList(data)
-        // Simpan salinan data ke localStorage sebagai cadangan offline
         localStorage.setItem('kanji_vocab_cache', JSON.stringify(data))
       }
     } catch (err) {
       console.warn("Gagal terhubung ke server (Fetch Failed), memuat data offline...", err)
-      // Fallback jika terjadi kesalahan jaringan secara mendadak
       const cachedData = localStorage.getItem('kanji_vocab_cache')
       if (cachedData) {
         setVocabList(JSON.parse(cachedData))
@@ -82,10 +78,11 @@ export default function KanjiModule({ onBack }) {
     }
   }, [quizIndex, shuffledQuizList, vocabList])
 
-  const speakJapanese = (text) => {
+  // Perbaikan suara: Menggunakan bacaan romaji/kun-onyomi agar pelafalan browser pas (misal membaca 'hi' atau 'nichi' bukan karakter tunggal mentah)
+  const speakJapanese = (textToSpeak) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel()
-      const u = new SpeechSynthesisUtterance(text)
+      const u = new SpeechSynthesisUtterance(textToSpeak)
       u.lang = 'ja-JP'
       window.speechSynthesis.speak(u)
     }
@@ -96,7 +93,8 @@ export default function KanjiModule({ onBack }) {
     setSlideDirection('-translate-x-full opacity-0 scale-95')
     setTimeout(() => {
       const n = (currentIndex + 1) % vocabList.length
-      setCurrentIndex(n); speakJapanese(vocabList[n]?.hiragana)
+      setCurrentIndex(n)
+      speakJapanese(vocabList[n]?.romaji?.split('/')[0].trim() || vocabList[n]?.hiragana)
       setSlideDirection('translate-x-full opacity-0 scale-95')
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
@@ -107,7 +105,8 @@ export default function KanjiModule({ onBack }) {
     setSlideDirection('-translate-x-full opacity-0 scale-95')
     setTimeout(() => {
       const p = (currentIndex - 1 + vocabList.length) % vocabList.length
-      setCurrentIndex(p); speakJapanese(vocabList[p]?.hiragana)
+      setCurrentIndex(p)
+      speakJapanese(vocabList[p]?.romaji?.split('/')[0].trim() || vocabList[p]?.hiragana)
       setSlideDirection('translate-x-full opacity-0 scale-95')
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
@@ -121,6 +120,29 @@ export default function KanjiModule({ onBack }) {
     if (d > 30) handleNextCard()
     else if (d < -30) handlePrevCard()
     touchStartX.current = 0; touchEndX.current = 0
+  }
+
+  // Peta Penomoran Guratan (Stroke Order) untuk Kanji N5
+  const KANJI_GUIDES = {
+    '日': [['①',110,45],['②',75,95],['③',135,95],['④',110,140]],
+    '月': [['①',90,70],['②',115,55],['③',115,105],['④',115,155]],
+    '火': [['①',110,60],['②',75,120],['③',145,110],['④',110,165]],
+    '水': [['①',110,45],['②',75,90],['③',140,85],['④',110,150]],
+    '木': [['①',75,75],['②',110,45],['③',110,110],['④',145,110]],
+    '金': [['①',110,45],['②',110,80],['③',75,110],['④',145,110],['⑤',110,135],['⑥',110,165]],
+    '土': [['①',75,75],['②',110,50],['③',110,135]],
+    '人': [['①',110,55],['②',110,75]],
+    '車': [['①',75,70],['②',75,100],['③',110,70],['④',75,130],['⑤',110,160]],
+    '本': [['①',75,75],['②',110,45],['③',110,110],['④',145,110]],
+    '川': [['①',85,60],['②',115,50],['③',145,45]],
+    '山': [['①',110,50],['②',75,85],['③',145,85]],
+    '雨': [['①',110,50],['②',75,80],['③',145,80],['④',95,115],['⑤',125,115],['⑥',95,145],['⑦',125,145],['⑧',110,110]],
+    '天': [['①',80,75],['②',140,70],['③',110,50],['④',110,135]],
+    '気': [['①',80,60],['②',115,55],['③',145,50],['④',80,105],['⑤',140,100],['⑥',110,140],['⑦',80,165],['⑧',140,160]],
+    '学校': [['①',90,60],['②',130,55]],
+    '先生': [['①',90,60],['②',130,55]],
+    '学生': [['①',90,60],['②',130,55]],
+    '日本': [['①',110,45],['②',75,95],['③',135,95],['④',110,140]]
   }
 
   const drawGuide = () => {
@@ -148,9 +170,12 @@ export default function KanjiModule({ onBack }) {
       ctx.fillStyle = '#dc2626'; ctx.fill()
       ctx.fillStyle = '#fff'; ctx.fillText(num, x*scale, y*scale+1)
     }
-    if (cur?.hiragana === '日') {
-      drawBadge('①',110,50); drawBadge('②',70,95); drawBadge('③',130,95); drawBadge('④',110,140)
+
+    const points = KANJI_GUIDES[cur?.hiragana]
+    if (points) {
+      points.forEach(([n,x,y]) => drawBadge(n,x,y))
     }
+
     ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 18; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
   }
 
@@ -202,7 +227,7 @@ export default function KanjiModule({ onBack }) {
         {activeTab === 'flashcard' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-              onClick={() => { setIsFlipped(!isFlipped); speakJapanese(currentVocab.hiragana) }}
+              onClick={() => { setIsFlipped(!isFlipped); speakJapanese(currentVocab.romaji?.split('/')[0].trim() || currentVocab.hiragana) }}
               className={`w-full h-[380px] sm:h-[420px] cursor-pointer [perspective:1000px] transition-all duration-300 ${slideDirection}`}>
               <div className={`relative w-full h-full duration-500 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
                 <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] border-2 border-indigo-500/50 bg-slate-900 overflow-hidden">
@@ -234,7 +259,7 @@ export default function KanjiModule({ onBack }) {
             </div>
             <div className="flex gap-2 w-full">
               <button onClick={drawGuide} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm font-semibold">🔄 Hapus</button>
-              <button onClick={() => speakJapanese(currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button>
+              <button onClick={() => speakJapanese(currentVocab.romaji?.split('/')[0].trim() || currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button>
             </div>
           </div>
         )}
@@ -243,7 +268,7 @@ export default function KanjiModule({ onBack }) {
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             {!quizFinished ? (
               <div className="w-full bg-slate-800 border border-slate-700 p-4 rounded-2xl space-y-3">
-                <div className="flex justify-between text-xs text-slate-400"><span>Sesi {quizSession+1} • {quizIndex+1}/{shuffledQuizList.length}</span><button onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)} className="text-indigo-400">🔊</button></div>
+                <div className="flex justify-between text-xs text-slate-400"><span>Sesi {quizSession+1} • {quizIndex+1}/{shuffledQuizList.length}</span><button onClick={() => speakJapanese(shuffledQuizList[quizIndex].romaji?.split('/')[0].trim() || shuffledQuizList[quizIndex].hiragana)} className="text-indigo-400">🔊</button></div>
                 <div className="text-center"><p className="text-xs text-slate-400">Pilih cara baca:</p><div className="text-6xl font-extrabold my-2">{shuffledQuizList[quizIndex]?.hiragana}</div></div>
                 <div className="grid grid-cols-2 gap-2">{shuffledOptions.map((opt,i) => (<button key={i} onClick={() => { if(opt===shuffledQuizList[quizIndex].romaji) setQuizScore(p=>p+1); if(quizIndex+1<shuffledQuizList.length) setQuizIndex(p=>p+1); else setQuizFinished(true)}} className="py-3 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm">{opt}</button>))}</div>
               </div>

@@ -162,7 +162,6 @@ export default function ConversationModule({ onBack }) {
                   <div className="relative z-10 space-y-2">
                     <h3 className="text-2xl font-extrabold text-emerald-300">{currentVocab.meaning_id}</h3>
                     {currentVocab.meaning_en && <p className="text-sm text-emerald-200">"{currentVocab.meaning_en}"</p>}
-                    <button onClick={(e)=>{e.stopPropagation(); speakJapanese(currentVocab.hiragana)}} className="mt-2 text-xs bg-indigo-600 px-3 py-1.5 rounded-full">🔊 Dengar lagi</button>
                   </div>
                 </div>
               </div>
