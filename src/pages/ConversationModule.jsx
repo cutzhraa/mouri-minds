@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import QuizStageMenu from '../components/QuizStageMenu'
 
 export default function ConversationModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -11,14 +12,20 @@ export default function ConversationModule({ onBack }) {
   const [quizScore, setQuizScore] = useState(0)
   const [quizIndex, setQuizIndex] = useState(0)
   const [quizFinished, setQuizFinished] = useState(false)
-  const [quizSession, setQuizSession] = useState(0)
+  const [quizSession, setQuizSession] = useState(() => Number(localStorage.getItem('conversation_quiz_session_v2')) || 0)
   const [quizMode, setQuizMode] = useState(null) // null = pilih mode, 'visual' = tebak arti, 'audio' = tebak suara
   const [shuffledQuizList, setShuffledQuizList] = useState([])
   const [shuffledOptions, setShuffledOptions] = useState([])
+  const [quizProgress, setQuizProgress] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('conversation_quiz_progress_v2') || '{}') }
+    catch { return {} }
+  })
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
 
   useEffect(() => { fetchConversations() }, [])
+  useEffect(() => { localStorage.setItem('conversation_quiz_progress_v2', JSON.stringify(quizProgress)) }, [quizProgress])
+  useEffect(() => { localStorage.setItem('conversation_quiz_session_v2', String(quizSession)) }, [quizSession])
 
   const fetchConversations = async () => {
     setLoading(true)
@@ -119,13 +126,14 @@ export default function ConversationModule({ onBack }) {
 
   const handleAnswer = (selectedOpt) => {
     const currentQuizItem = shuffledQuizList[quizIndex]
-    if (selectedOpt.id === currentQuizItem.id) {
-      setQuizScore(prev => prev + 1)
-    }
+    const correct = selectedOpt.id === currentQuizItem.id
+    const nextScore = quizScore + (correct ? 1 : 0)
+    if (correct) setQuizScore(nextScore)
     if (quizIndex + 1 < shuffledQuizList.length) {
       setQuizIndex(prev => prev + 1)
     } else {
       setQuizFinished(true)
+      if (nextScore === shuffledQuizList.length) setQuizProgress(prev => ({ ...prev, [quizSession]: { ...(prev[quizSession] || { visual: false, audio: false }), [quizMode]: true } }))
     }
   }
 
@@ -133,23 +141,19 @@ export default function ConversationModule({ onBack }) {
   if (vocabList.length === 0) return <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 text-white"><p className="text-xs">Belum ada data Percakapan.</p><button onClick={onBack} className="px-3 py-1.5 bg-indigo-600 rounded-xl text-xs">Kembali</button></div>
 
   const currentVocab = vocabList[currentIndex]
-  const isPassed = shuffledQuizList.length > 0 && quizScore >= Math.ceil(shuffledQuizList.length * 0.8)
-  const hasNextSession = ((quizSession + 1) * pageSize) < vocabList.length
+  const isPassed = shuffledQuizList.length > 0 && quizScore === shuffledQuizList.length
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-900 text-white px-4 py-6 max-w-md mx-auto w-full justify-start space-y-6 overflow-y-auto">
-      <div className="w-full space-y-3 shrink-0">
-        <div className="flex justify-between items-center w-full">
-          <button onClick={onBack} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs border border-slate-700">← Kembali</button>
-          <h1 className="text-sm font-bold">🔬 Bab 4: Percakapan</h1>
-        </div>
-        <div className="flex justify-center gap-1.5 w-full pt-[5vh] sm:pt-[12vh]">
-          <button onClick={() => setActiveTab('flashcard')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'flashcard' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>📚 Dialog</button>
-          <button onClick={() => { setActiveTab('quiz'); setQuizMode(null); }} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'quiz' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>⚡ Kuis {quizSession+1}</button>
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900 text-white overflow-y-auto select-none pb-24">
+      <div className="flex flex-col items-center justify-start px-4 pt-8 max-w-md mx-auto w-full space-y-6">
+        <div className="text-center"><h1 className="text-xl sm:text-2xl font-black tracking-wide text-white drop-shadow">Bab 4: Percakapan &amp; Kosakata</h1></div>
+        <div className="w-full max-w-[360px] mx-auto bg-slate-800/90 p-1.5 rounded-2xl flex items-center justify-between gap-1.5 shadow-xl border border-slate-700/80">
+          <button onClick={() => setActiveTab('flashcard')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${activeTab === 'flashcard' ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]' : 'text-slate-400 hover:text-white hover:bg-slate-700/60'}`}>📚 Flashcard</button>
+          <button onClick={() => { setActiveTab('quiz'); setQuizMode(null); }} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${activeTab === 'quiz' ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]' : 'text-slate-400 hover:text-white hover:bg-slate-700/60'}`}>⚡ Kuis {quizSession+1}</button>
         </div>
       </div>
 
-      <div className="flex flex-col items-center justify-center w-full pt-2 pb-6">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 py-2 pb-24 max-w-md mx-auto w-full">
         {activeTab === 'flashcard' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
@@ -162,7 +166,7 @@ export default function ConversationModule({ onBack }) {
                     <span className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-500/40">Kartu {currentIndex+1}/{vocabList.length}</span>
                     <h2 className="text-[28px] sm:text-[32px] font-extrabold text-white my-2 leading-tight">{currentVocab.hiragana}</h2>
                     <p className="text-xs text-indigo-300 font-mono">[{currentVocab.romaji}]</p>
-                    <p className="text-xs text-slate-300">✨ Klik untuk arti | Swipe</p>
+                    <p className="text-xs text-slate-300"> Klik untuk arti | Swipe</p>
                   </div>
                 </div>
                 <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)] border-2 border-emerald-500/50 bg-slate-900 overflow-hidden">
@@ -177,26 +181,26 @@ export default function ConversationModule({ onBack }) {
           </div>
         )}
 
+
         {activeTab === 'quiz' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             {quizMode === null ? (
-              // MENU PEMILIHAN MODE KUIS PERCAKAPAN
-              <div className="w-full bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4 shadow-xl">
-                <h2 className="text-base font-bold text-white">🎯 Pilih Mode Kuis Percakapan</h2>
-                <div className="grid grid-cols-1 gap-3 pt-2">
-                  <button onClick={() => setQuizMode('visual')} className="py-3.5 px-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-md transition-all active:scale-95">
-                    👁️ Mode Visual (Tebak Arti Teks)
-                  </button>
-                  <button onClick={() => setQuizMode('audio')} className="py-3.5 px-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-md transition-all active:scale-95">
-                    🎧 Mode Audio (Dengar Suara Dialog)
-                  </button>
-                </div>
-              </div>
+              <QuizStageMenu
+                session={quizSession}
+                sessionCount={Math.ceil(vocabList.length / pageSize)}
+                progress={quizProgress}
+                onSelectSession={(session) => { setQuizSession(session); setQuizFinished(false); setQuizScore(0); setQuizIndex(0) }}
+                onStartMode={(mode) => {
+                  setQuizMode(mode); setQuizFinished(false); setQuizScore(0); setQuizIndex(0)
+                }}
+                visualLabel="Mode Visual (Tebak Arti Teks)"
+                audioLabel="Mode Audio (Dengar Suara Dialog)"
+              />
             ) : !quizFinished ? (
               <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-xl">
                 <div className="flex justify-between items-center text-xs text-slate-400">
-                  <button onClick={() => setQuizMode(null)} className="text-indigo-400 hover:underline">← Ganti Mode</button>
-                  <span>Sesi {quizSession+1} • {quizIndex+1}/{shuffledQuizList.length}</span>
+                  <button onClick={() => setQuizMode(null)} className="text-indigo-400 hover:underline"> ← Ganti Mode</button>
+                  <span>Sesi {quizSession+1}  {quizIndex+1}/{shuffledQuizList.length}</span>
                 </div>
 
                 {quizMode === 'visual' ? (
@@ -244,8 +248,8 @@ export default function ConversationModule({ onBack }) {
               <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl text-center space-y-3">
                 <h2 className="text-xl font-bold text-emerald-400">Kuis Selesai! 🎉</h2>
                 <div className="text-3xl font-black text-indigo-400">{quizScore}/{shuffledQuizList.length}</div>
-                {isPassed && hasNextSession ? (
-                  <button onClick={() => setQuizSession(p => p + 1)} className="w-full py-3 bg-emerald-600 rounded-xl text-sm font-bold shadow-lg">Lanjut Sesi →</button>
+                {isPassed ? (
+                  <button onClick={() => { setQuizMode(null); setQuizFinished(false); setQuizScore(0); setQuizIndex(0) }} className="w-full py-3 bg-emerald-600 rounded-xl text-sm font-bold shadow-lg">Kembali ke Menu Kuis</button>
                 ) : (
                   <button onClick={() => { setQuizFinished(false); setQuizScore(0); setQuizIndex(0); setQuizMode(null); }} className="w-full py-3 bg-indigo-600 rounded-xl text-sm font-bold shadow-lg">Ulangi Kuis</button>
                 )}
@@ -253,6 +257,11 @@ export default function ConversationModule({ onBack }) {
             )}
           </div>
         )}
+      </div>
+      <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 py-3 px-6 flex justify-center items-center z-50 shadow-2xl">
+        <button onClick={onBack} className="w-full max-w-sm py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg border border-slate-700 text-slate-200">
+          <span>←</span> Kembali ke Menu Utama
+        </button>
       </div>
     </div>
   )

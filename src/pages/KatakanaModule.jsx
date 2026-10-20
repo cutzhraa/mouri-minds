@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import StrokeOrderGuide from '../components/StrokeOrderGuide'
+import QuizStageMenu from '../components/QuizStageMenu'
 
 export default function KatakanaModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -15,16 +17,22 @@ export default function KatakanaModule({ onBack }) {
   const [quizScore, setQuizScore] = useState(0)
   const [quizIndex, setQuizIndex] = useState(0)
   const [quizFinished, setQuizFinished] = useState(false)
-  const [quizSession, setQuizSession] = useState(0)
+  const [quizSession, setQuizSession] = useState(() => Number(localStorage.getItem('katakana_quiz_session_v2')) || 0)
   const [quizMode, setQuizMode] = useState(null)
   const [shuffledQuizList, setShuffledQuizList] = useState([])
   const [shuffledOptions, setShuffledOptions] = useState([])
+  const [quizProgress, setQuizProgress] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('katakana_quiz_progress_v2') || '{}') }
+    catch { return {} }
+  })
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
   const finishTimeoutRef = useRef(null)
   const strokePathsRef = useRef([])
 
   useEffect(() => { fetchKatakana() }, [])
+  useEffect(() => { localStorage.setItem('katakana_quiz_progress_v2', JSON.stringify(quizProgress)) }, [quizProgress])
+  useEffect(() => { localStorage.setItem('katakana_quiz_session_v2', String(quizSession)) }, [quizSession])
   const fetchKatakana = async () => {
     setLoading(true)
     if (!navigator.onLine) {
@@ -243,32 +251,37 @@ export default function KatakanaModule({ onBack }) {
 
   const currentVocab = vocabList[currentIndex]
   const targetStrokes = KATAKANA_STRIKE_TARGETS[currentVocab?.hiragana] || 2
-  const isPassed = shuffledQuizList.length > 0 && quizScore >= Math.ceil(shuffledQuizList.length * 0.8)
-  const hasNextSession = ((quizSession + 1) * pageSize) < vocabList.length
+  const currentStrokeCount = Math.min(strokeCount, targetStrokes)
+  const isPassed = shuffledQuizList.length > 0 && quizScore === shuffledQuizList.length
   const handleAnswer = (selectedOpt) => {
     const cur = shuffledQuizList[quizIndex]
-    if (selectedOpt.id === cur.id) setQuizScore(p=>p+1)
+    const correct = selectedOpt.id === cur.id
+    const nextScore = quizScore + (correct ? 1 : 0)
+    if (correct) setQuizScore(nextScore)
     if (quizIndex + 1 < shuffledQuizList.length) setQuizIndex(p=>p+1)
-    else setQuizFinished(true)
+    else {
+      setQuizFinished(true)
+      if (nextScore === shuffledQuizList.length) setQuizProgress(prev => ({ ...prev, [quizSession]: { ...(prev[quizSession] || { visual: false, audio: false }), [quizMode]: true } }))
+    }
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-slate-900 text-white px-4 py-6 max-w-md mx-auto w-full justify-start space-y-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900 text-white overflow-y-auto select-none pb-24">
       <style>{`@keyframes stampDrop{0%{transform:scale(2.2) rotate(-25deg);opacity:0;filter:blur(8px)}50%{transform:scale(0.9) rotate(-10deg);opacity:1;filter:blur(0)}70%{transform:scale(1.15) rotate(-13deg)}100%{transform:scale(1) rotate(-12deg);opacity:1}}.animate-stamp{animation:stampDrop 0.35s cubic-bezier(0.175,0.885,0.32,1.275) forwards}`}</style>
-      <div className="w-full space-y-3 shrink-0">
-        <div className="flex justify-between items-center w-full"><button onClick={onBack} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs border border-slate-700">← Kembali</button><h1 className="text-sm font-bold">🎩 Bab 2: Katakana</h1></div>
-        <div className="flex justify-center gap-1.5 w-full pt-[5vh] sm:pt-[12vh]">
-          <button onClick={() => setActiveTab('flashcard')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'flashcard' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>📚 Flashcard</button>
-          <button onClick={() => setActiveTab('writing')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'writing' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>✍️ Kuas</button>
-          <button onClick={() => { setActiveTab('quiz'); setQuizMode(null); }} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'quiz' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>⚡ Kuis {quizSession+1}</button>
+      <div className="flex flex-col items-center justify-start px-4 pt-8 max-w-md mx-auto w-full space-y-6">
+        <div className="text-center"><h1 className="text-xl sm:text-2xl font-black tracking-wide text-white drop-shadow">Bab 2: Katakana Dasar</h1></div>
+        <div className="w-full max-w-[360px] mx-auto bg-slate-800/90 p-1.5 rounded-2xl flex items-center justify-between gap-1.5 shadow-xl border border-slate-700/80">
+          <button onClick={() => setActiveTab('flashcard')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${activeTab === 'flashcard' ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]' : 'text-slate-400 hover:text-white hover:bg-slate-700/60'}`}>📚 Flashcard</button>
+          <button onClick={() => setActiveTab('writing')} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${activeTab === 'writing' ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]' : 'text-slate-400 hover:text-white hover:bg-slate-700/60'}`}>✍️ Kuas</button>
+          <button onClick={() => { setActiveTab('quiz'); setQuizMode(null); }} className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${activeTab === 'quiz' ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]' : 'text-slate-400 hover:text-white hover:bg-slate-700/60'}`}>⚡ Kuis {quizSession+1}</button>
         </div>
       </div>
-      <div className="flex flex-col items-center justify-center w-full pt-2 pb-6">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 py-2 pb-24 max-w-md mx-auto w-full">
         {activeTab === 'flashcard' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onClick={() => { setIsFlipped(!isFlipped); speakJapanese(currentVocab.hiragana) }} className={`w-full h-[380px] sm:h-[420px] cursor-pointer [perspective:1000px] transition-all duration-300 ${slideDirection}`}>
               <div className={`relative w-full h-full duration-500 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
-                <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] border-2 border-indigo-500/50 bg-slate-900 overflow-hidden"><div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/kid.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/60"></div><div className="relative z-10 space-y-2"><span className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-500/40">Kartu {currentIndex+1}/{vocabList.length}</span><h2 className="text-7xl sm:text-8xl font-extrabold text-white my-2">{currentVocab.hiragana}</h2><p className="text-xs text-slate-300">✨ Klik untuk balik | Swipe</p></div></div>
+                <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] border-2 border-indigo-500/50 bg-slate-900 overflow-hidden"><div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/kid.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/60"></div><div className="relative z-10 space-y-2"><span className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-500/40">Kartu {currentIndex+1}/{vocabList.length}</span><h2 className="text-7xl sm:text-8xl font-extrabold text-white my-2">{currentVocab.hiragana}</h2><p className="text-xs text-slate-300"> Klik untuk balik | Swipe</p></div></div>
                 <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)] border-2 border-emerald-500/50 bg-slate-900 overflow-hidden"><div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/kid.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/65"></div><div className="relative z-10 space-y-2"><h3 className="text-3xl font-extrabold text-emerald-300">{currentVocab.meaning_id}</h3><p className="text-base text-emerald-200 font-mono">Romaji: [{currentVocab.romaji}]</p></div></div>
               </div>
             </div>
@@ -277,6 +290,7 @@ export default function KatakanaModule({ onBack }) {
         {activeTab === 'writing' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px] space-y-3">
             <div className="text-center"><p className="text-xs text-slate-300">Selesaikan semua guratan ({strokeCount}/{targetStrokes}):</p><div className="text-4xl font-black text-indigo-400">{currentVocab.hiragana}</div></div>
+            <StrokeOrderGuide character={currentVocab.hiragana} completedStrokes={currentStrokeCount} />
             <div className="relative bg-white border-3 border-slate-700 rounded-2xl shadow-xl overflow-hidden cursor-crosshair w-full aspect-square">
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="w-full border-b border-dashed border-slate-300 absolute"></div><div className="h-full border-r border-dashed border-slate-300 absolute"></div></div>
               <canvas ref={canvasRef} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing} className="touch-none block relative z-10 w-full h-full" />
@@ -290,16 +304,26 @@ export default function KatakanaModule({ onBack }) {
                 </div>
               )}
             </div>
-            <div className="flex gap-2 w-full"><button onClick={() => { setStrokeCount(0); drawGuide(); }} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold">🔄 Ulangi Corekan</button><button onClick={() => speakJapanese(currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button></div>
+            <div className="flex gap-2 w-full"><button onClick={() => { setStrokeCount(0); drawGuide(); }} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold">🔄 🔄 Ulangi Coretan</button><button onClick={() => speakJapanese(currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button></div>
           </div>
         )}
         {activeTab === 'quiz' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             {quizMode === null ? (
-              <div className="w-full bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4"><h2 className="text-base font-bold">🎯 Pilih Mode Kuis</h2><div className="grid grid-cols-1 gap-3 pt-2"><button onClick={() => setQuizMode('visual')} className="py-3.5 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm">👁️ Mode Visual</button><button onClick={() => setQuizMode('audio')} className="py-3.5 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm">🎧 Mode Audio</button></div></div>
+              <QuizStageMenu
+                session={quizSession}
+                sessionCount={Math.ceil(vocabList.length / pageSize)}
+                progress={quizProgress}
+                onSelectSession={(session) => { setQuizSession(session); setQuizFinished(false); setQuizScore(0); setQuizIndex(0) }}
+                onStartMode={(mode) => {
+                  setQuizMode(mode); setQuizFinished(false); setQuizScore(0); setQuizIndex(0)
+                }}
+                visualLabel="Mode Visual (Tebak Romaji)"
+                audioLabel="Mode Audio (Tebak Suara)"
+              />
             ) : !quizFinished ? (
               <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4">
-                <div className="flex justify-between text-xs text-slate-400"><button onClick={() => setQuizMode(null)} className="text-indigo-400">← Ganti Mode</button><span>Sesi {quizSession+1} • {quizIndex+1}/{shuffledQuizList.length}</span></div>
+                <div className="flex justify-between text-xs text-slate-400"><button onClick={() => setQuizMode(null)} className="text-indigo-400"> ← Ganti Mode</button><span>Sesi {quizSession+1}  {quizIndex+1}/{shuffledQuizList.length}</span></div>
                 {quizMode === 'visual' ? (
                   <div className="space-y-3"><div className="text-center"><p className="text-xs text-slate-400">Pilih romaji:</p><div className="text-6xl font-extrabold my-2">{shuffledQuizList[quizIndex]?.hiragana}</div></div><div className="grid grid-cols-2 gap-2">{shuffledOptions.map((opt,i)=><button key={i} onClick={()=>handleAnswer(opt)} className="py-3 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm">{opt.romaji}</button>)}</div></div>
                 ) : (
@@ -307,10 +331,15 @@ export default function KatakanaModule({ onBack }) {
                 )}
               </div>
             ) : (
-              <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl text-center space-y-3"><h2 className="text-xl font-bold text-emerald-400">Kuis Selesai! 🎉</h2><div className="text-3xl font-black text-indigo-400">{quizScore}/{shuffledQuizList.length}</div>{isPassed && hasNextSession ? <button onClick={()=>setQuizSession(p=>p+1)} className="w-full py-3 bg-emerald-600 rounded-xl text-sm font-bold">Lanjut Sesi →</button> : <button onClick={()=>{setQuizFinished(false);setQuizScore(0);setQuizIndex(0);setQuizMode(null)}} className="w-full py-3 bg-indigo-600 rounded-xl text-sm font-bold">Ulangi Kuis</button>}</div>
+              <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl text-center space-y-3"><h2 className="text-xl font-bold text-emerald-400">Kuis Selesai! 🎉</h2><div className="text-3xl font-black text-indigo-400">{quizScore}/{shuffledQuizList.length}</div>{isPassed ? <button onClick={()=>{setQuizMode(null);setQuizFinished(false);setQuizScore(0);setQuizIndex(0)}} className="w-full py-3 bg-emerald-600 rounded-xl text-sm font-bold">Kembali ke Menu Kuis</button> : <button onClick={()=>{setQuizFinished(false);setQuizScore(0);setQuizIndex(0);setQuizMode(null)}} className="w-full py-3 bg-indigo-600 rounded-xl text-sm font-bold">Ulangi Kuis 🔄</button>}</div>
             )}
           </div>
         )}
+      </div>
+      <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 py-3 px-6 flex justify-center items-center z-50 shadow-2xl">
+        <button onClick={onBack} className="w-full max-w-sm py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg border border-slate-700 text-slate-200">
+          <span>←</span> Kembali ke Menu Utama
+        </button>
       </div>
     </div>
   )

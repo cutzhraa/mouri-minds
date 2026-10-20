@@ -4,7 +4,7 @@ import HiraganaModule from './HiraganaModule'
 import KatakanaModule from './KatakanaModule'
 import KanjiModule from './KanjiModule'
 import ConversationModule from './ConversationModule'
-import { useRegisterSW } from 'virtual:pwa-register/react' // <--- Import PWA register hook
+import { useRegisterSW } from 'virtual:pwa-register/react'
 
 export default function Dashboard({ session }) {
   const [currentView, setCurrentView] = useState('dashboard') // 'dashboard', 'hiragana', 'katakana', 'kanji', 'conversation'
@@ -24,7 +24,7 @@ export default function Dashboard({ session }) {
 
   const t = {
     welcome: "Selamat Datang di Mouri Minds!",
-    subtitle: "Aplikasi Belajar Bahasa Jepang & Inggris ala Detektif",
+    subtitle: "Aplikasi Belajar Bahasa Jepang ala Detektif",
     bab1: "Bab 1: Hiragana Dasar",
     desc1: "Pengenalan huruf hiragana dasar.",
     bab2: "Bab 2: Katakana Dasar",
@@ -37,8 +37,9 @@ export default function Dashboard({ session }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-900 text-white select-none">
-      {/* Universal Navbar */}
+    <div className="flex min-h-screen flex-col bg-slate-900 text-white select-none pb-16 sm:pb-0">
+      {currentView === 'dashboard' && <>
+      {/* Navbar hanya tampil di dashboard, tidak menutupi tampilan bab belajar. */}
       <nav className="flex justify-between items-center px-8 py-4 bg-slate-800 border-b border-slate-700 shadow sticky top-0 z-50">
         <div 
           onClick={() => setCurrentView('dashboard')}
@@ -80,6 +81,7 @@ export default function Dashboard({ session }) {
           </div>
         </div>
       )}
+      </>}
 
       {/* Main Content Router */}
       <div className="flex-1 flex flex-col">
@@ -167,6 +169,47 @@ export default function Dashboard({ session }) {
           </main>
         )}
       </div>
+
+      {/* Bottom Navigation Bar (Hanya tampil di Dashboard) */}
+      {currentView === 'dashboard' && (
+        <div className="fixed bottom-0 left-0 right-0 bg-slate-800 border-t border-slate-700 py-2 px-6 flex justify-around items-center z-50 shadow-lg">
+          <button 
+            onClick={() => setCurrentView('dashboard')}
+            className="flex flex-col items-center text-indigo-400 text-xs font-semibold gap-1"
+          >
+            <span className="text-lg">🏠</span>
+            <span>Home</span>
+          </button>
+          <button 
+            onClick={() => setCurrentView('hiragana')}
+            className="flex flex-col items-center text-slate-400 hover:text-white text-xs font-semibold gap-1 transition"
+          >
+            <span className="text-lg">あ</span>
+            <span>Hiragana</span>
+          </button>
+          <button 
+            onClick={() => setCurrentView('katakana')}
+            className="flex flex-col items-center text-slate-400 hover:text-white text-xs font-semibold gap-1 transition"
+          >
+            <span className="text-lg">ア</span>
+            <span>Katakana</span>
+          </button>
+          <button 
+            onClick={() => setCurrentView('kanji')}
+            className="flex flex-col items-center text-slate-400 hover:text-white text-xs font-semibold gap-1 transition"
+          >
+            <span className="text-lg">漢字</span>
+            <span>Kanji</span>
+          </button>
+          <button 
+            onClick={() => setCurrentView('conversation')}
+            className="flex flex-col items-center text-slate-400 hover:text-white text-xs font-semibold gap-1 transition"
+          >
+            <span className="text-lg">💬</span>
+            <span>Chat</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }

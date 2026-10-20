@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import StrokeOrderGuide from '../components/StrokeOrderGuide'
 
 export default function HiraganaModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -7,7 +8,7 @@ export default function HiraganaModule({ onBack }) {
   const [isFlipped, setIsFlipped] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('flashcard')
-  const [slideDirection, setSlideDirection] = useState('translate-x-0 opacity-100')
+  const [slideAnim, setSlideAnim] = useState('opacity-100 scale-100 translate-x-0')
   const canvasRef = useRef(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [strokeCount, setStrokeCount] = useState(0)
@@ -15,15 +16,26 @@ export default function HiraganaModule({ onBack }) {
   const [quizScore, setQuizScore] = useState(0)
   const [quizIndex, setQuizIndex] = useState(0)
   const [quizFinished, setQuizFinished] = useState(false)
-  const [quizSession, setQuizSession] = useState(0)
-  const [quizMode, setQuizMode] = useState(null) // null = pilih mode, 'visual' = biasa, 'audio' = suara
+  const [quizSession, setQuizSession] = useState(() => Number(localStorage.getItem('hiragana_quiz_session_v2')) || 0)
+  const [quizMode, setQuizMode] = useState(null)
   const [shuffledQuizList, setShuffledQuizList] = useState([])
   const [shuffledOptions, setShuffledOptions] = useState([])
+
+  const [quizProgress, setQuizProgress] = useState(() => {
+    const saved = localStorage.getItem('hiragana_quiz_progress_v2')
+    return saved ? JSON.parse(saved) : {}
+  })
+
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
   const finishTimeoutRef = useRef(null)
 
   useEffect(() => { fetchHiragana() }, [])
+
+  useEffect(() => {
+    localStorage.setItem('hiragana_quiz_progress_v2', JSON.stringify(quizProgress))
+  }, [quizProgress])
+  useEffect(() => { localStorage.setItem('hiragana_quiz_session_v2', String(quizSession)) }, [quizSession])
 
   const fetchHiragana = async () => {
     setLoading(true)
@@ -90,30 +102,42 @@ export default function HiraganaModule({ onBack }) {
     }
   }
   
+  // MAJU KE KARTU BERIKUTNYA (BATAS MAKSIMAL DI KARTU TERAKHIR 'n')
   const handleNextCard = () => {
+    if (currentIndex >= vocabList.length - 1) return 
+    
     setIsFlipped(false)
     setAnalysisResult(null)
     setStrokeCount(0)
-    setSlideDirection('-translate-x-full opacity-0 scale-95')
+    setSlideAnim('opacity-0 translate-x-8 scale-95')
     setTimeout(() => {
-      const n = (currentIndex + 1) % vocabList.length
-      setCurrentIndex(n); speakJapanese(vocabList[n]?.hiragana)
-      setSlideDirection('translate-x-full opacity-0 scale-95')
-      setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
-    }, 150)
+      const n = currentIndex + 1
+      setCurrentIndex(n)
+      speakJapanese(vocabList[n]?.hiragana)
+      setSlideAnim('opacity-0 -translate-x-8 scale-95')
+      setTimeout(() => {
+        setSlideAnim('opacity-100 translate-x-0 scale-100')
+      }, 50)
+    }, 200)
   }
   
+  // BISA MUNDUR KE KARTU SEBELUMNYA (TETAPI TERBATAS DI KARTU PERTAMA 'a', TIDAK BISA TEMBUS KE 'n')
   const handlePrevCard = () => {
+    if (currentIndex <= 0) return // Berhenti di kartu pertama ('a'), tidak bisa backswipe tembus ke akhir
+
     setIsFlipped(false)
     setAnalysisResult(null)
     setStrokeCount(0)
-    setSlideDirection('-translate-x-full opacity-0 scale-95')
+    setSlideAnim('opacity-0 -translate-x-8 scale-95')
     setTimeout(() => {
-      const p = (currentIndex - 1 + vocabList.length) % vocabList.length
-      setCurrentIndex(p); speakJapanese(vocabList[p]?.hiragana)
-      setSlideDirection('translate-x-full opacity-0 scale-95')
-      setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
-    }, 150)
+      const p = currentIndex - 1
+      setCurrentIndex(p)
+      speakJapanese(vocabList[p]?.hiragana)
+      setSlideAnim('opacity-0 translate-x-8 scale-95')
+      setTimeout(() => {
+        setSlideAnim('opacity-100 translate-x-0 scale-100')
+      }, 50)
+    }, 200)
   }
   
   const handleTouchStart = (e) => { touchStartX.current = e.touches[0].clientX }
@@ -121,12 +145,11 @@ export default function HiraganaModule({ onBack }) {
   const handleTouchEnd = () => {
     if (!touchStartX.current || !touchEndX.current) return
     const d = touchStartX.current - touchEndX.current
-    if (d > 30) handleNextCard()
-    else if (d < -30) handlePrevCard()
+    if (d > 40) handleNextCard()       // Swipe ke kiri = Maju
+    else if (d < -40) handlePrevCard() // Swipe ke kanan = Mundur (bisa dari i balik ke a, tapi mentok di a)
     touchStartX.current = 0; touchEndX.current = 0
   }
 
-  // JUMLAH GURATAN RESMI & AKURAT (STROKE ORDER STANDARD)
   const HIRAGANA_STRIKE_TARGETS = {
     'あ': 3, 'い': 2, 'う': 2, 'え': 2, 'お': 3,
     'か': 3, 'き': 4, 'く': 1, 'け': 3, 'こ': 2,
@@ -140,54 +163,53 @@ export default function HiraganaModule({ onBack }) {
     'わ': 2, 'を': 3, 'ん': 1
   }
 
-  // TITIK KOORDINAT BADGE PENOMORAN GURATAN YANG PRESISI & RAPI PADA KANVAS 340x340
   const HIRAGANA_GUIDES = {
-    'あ': [['①',135,70], ['②',85,145], ['③',175,170]],
-    'い': [['①',110,75], ['②',210,85]],
-    'う': [['①',170,60], ['②',110,135]],
-    'え': [['①',140,80], ['②',80,195]],
-    'お': [['①',110,65], ['②',180,45], ['③',165,140]],
-    'か': [['①',110,65], ['②',190,55], ['③',150,165]],
-    'き': [['①',105,75], ['②',105,120], ['③',95,165], ['④',140,190]], // 4 guratan standar
-    'く': [['①',180,75]],
-    'け': [['①',105,80], ['②',185,65], ['③',140,150]],
-    'こ': [['①',130,80], ['②',110,185]],
-    'さ': [['①',110,70], ['②',180,105], ['③',120,205]],
-    'し': [['①',180,65]],
-    'す': [['①',120,70], ['②',135,135]],
-    'せ': [['①',115,75], ['②',140,150]],
-    'そ': [['①',120,65]], // 1 guratan bersambung
-    'た': [['①',110,75], ['②',190,65], ['③',130,135], ['④',130,190]],
-    'ち': [['①',120,75], ['②',120,160]],
+    'あ': [['①',80,115], ['②',160,55], ['③',250,180]],
+    'い': [['①',115,80], ['②',205,85]],
+    'う': [['①',165,65], ['②',115,130]],
+    'え': [['①',140,85], ['②',95,190]],
+    'お': [['①',80,115], ['②',160,55], ['③',240,150]],
+    'か': [['①',110,70], ['②',190,60], ['③',150,160]],
+    'き': [['①',110,75], ['②',110,120], ['③',100,165], ['④',140,185]],
+    'く': [['①',180,80]],
+    'け': [['①',110,80], ['②',185,70], ['③',140,150]],
+    'こ': [['①',130,85], ['②',115,180]],
+    'さ': [['①',115,75], ['②',180,105], ['③',125,200]],
+    'し': [['①',175,70]],
+    'す': [['①',125,75], ['②',140,135]],
+    'せ': [['①',120,80], ['②',140,145]],
+    'そ': [['①',125,70]],
+    'た': [['①',115,75], ['②',190,70], ['③',130,135], ['④',130,185]],
+    'ち': [['①',125,75], ['②',120,155]],
     'つ': [['①',160,110]],
     'て': [['①',120,95]],
-    'と': [['①',175,70], ['②',115,145]],
-    'な': [['①',120,70], ['②',180,55], ['③',120,135], ['④',145,190]],
-    'に': [['①',115,70], ['②',155,75], ['③',195,65]], // 3 guratan
-    'ぬ': [['①',140,55], ['②',130,140]],
-    'ね': [['①',135,60], ['②',135,135]],
+    'と': [['①',175,75], ['②',120,140]],
+    'な': [['①',125,75], ['②',180,60], ['③',120,135], ['④',145,185]],
+    'に': [['①',120,75], ['②',155,80], ['③',190,70]],
+    'ぬ': [['①',140,60], ['②',130,135]],
+    'ね': [['①',135,65], ['②',135,130]],
     'の': [['①',155,100]],
-    'は': [['①',115,70], ['②',175,60], ['③',135,150]],
+    'は': [['①',120,75], ['②',175,65], ['③',135,145]],
     'ひ': [['①',165,120]],
-    'ふ': [['①',155,50], ['②',105,110], ['③',190,120], ['④',145,150]], // 4 guratan
+    'ふ': [['①',155,55], ['②',110,110], ['③',185,115], ['④',145,145]],
     'へ': [['①',150,110]],
-    'ほ': [['①',120,60], ['②',175,50], ['③',130,135], ['④',135,190]],
-    'ま': [['①',115,70], ['②',115,135], ['③',135,190]],
-    'み': [['①',130,70], ['②',135,145]],
-    'む': [['①',125,60], ['②',145,140], ['③',180,185]], // 3 guratan
-    'め': [['①',140,75], ['②',125,130]],
-    'も': [['①',140,70], ['②',125,135], ['③',185,135]],
-    'や': [['①',115,70], ['②',175,60], ['③',155,160]],
-    'ゆ': [['①',135,65], ['②',185,115]],
-    'よ': [['①',155,60], ['②',135,155]],
-    'ら': [['①',135,70], ['②',130,145]],
-    'り': [['①',120,65], ['②',175,65]],
-    'る': [['①',150,70]],
-    'れ': [['①',125,70], ['②',155,130]],
+    'ほ': [['①',120,65], ['②',175,55], ['③',130,135], ['④',135,185]],
+    'ま': [['①',120,75], ['②',120,135], ['③',135,185]],
+    'み': [['①',135,75], ['②',135,140]],
+    'む': [['①',130,65], ['②',145,135], ['③',175,180]],
+    'め': [['①',140,75], ['②',130,130]],
+    'も': [['①',140,75], ['②',125,135], ['③',180,135]],
+    'や': [['①',120,75], ['②',175,65], ['③',150,155]],
+    'ゆ': [['①',135,70], ['②',180,115]],
+    'よ': [['①',155,65], ['②',135,150]],
+    'ら': [['①',140,75], ['②',130,140]],
+    'り': [['①',125,70], ['②',175,70]],
+    'る': [['①',150,75]],
+    'れ': [['①',130,75], ['②',155,125]],
     'ろ': [['①',145,110]],
-    'わ': [['①',125,70], ['②',165,130]], // 2 guratan
-    'を': [['①',125,65], ['②',135,115], ['③',150,185]],
-    'ん': [['①',150,110]] // 1 guratan
+    'わ': [['①',130,75], ['②',165,125]],
+    'を': [['①',130,70], ['②',135,115], ['③',150,180]],
+    'ん': [['①',150,110]]
   }
 
   const drawGuide = () => {
@@ -209,18 +231,46 @@ export default function HiraganaModule({ onBack }) {
     ctx.strokeText(current?.hiragana, canvas.width/2, canvas.height/2)
     ctx.restore()
 
-    const drawBadge = (num, x, y) => {
-      ctx.beginPath(); ctx.arc(x, y, 13, 0, 2 * Math.PI)
-      ctx.fillStyle = '#dc2626'; ctx.fill()
-      ctx.font = 'bold 14px sans-serif'
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      ctx.fillText(num, x, y + 1)
-    }
-
     const char = current?.hiragana
     const points = HIRAGANA_GUIDES[char]
     if (points) {
-      points.forEach(([num, x, y]) => drawBadge(num, x, y))
+      const radius = 14
+      const minGap = radius * 2 + 5
+      const placed = []
+      const offsets = [
+        [0, 0], [-minGap, 0], [minGap, 0], [0, -minGap], [0, minGap],
+        [-minGap, -minGap], [minGap, -minGap], [-minGap, minGap], [minGap, minGap],
+        [-minGap * 2, 0], [minGap * 2, 0], [0, -minGap * 2], [0, minGap * 2]
+      ]
+
+      points.forEach(([num, x, y]) => {
+        // Koordinat tiap huruf menjadi titik acuan. Geser hanya jika badge
+        // bertabrakan dengan nomor sebelumnya atau keluar dari kanvas.
+        const candidates = offsets.map(([dx, dy]) => ({
+          x: Math.max(radius + 2, Math.min(canvas.width - radius - 2, x + dx)),
+          y: Math.max(radius + 2, Math.min(canvas.height - radius - 2, y + dy))
+        }))
+        const position = candidates.find(candidate => placed.every(other =>
+          Math.hypot(candidate.x - other.x, candidate.y - other.y) >= minGap
+        )) || candidates[0]
+        placed.push(position)
+
+        ctx.save()
+        ctx.beginPath()
+        ctx.arc(position.x, position.y, radius, 0, 2 * Math.PI)
+        ctx.fillStyle = '#dc2626'
+        ctx.fill()
+        ctx.lineWidth = 2
+        ctx.strokeStyle = '#fff'
+        ctx.stroke()
+        ctx.font = '700 13px system-ui, sans-serif'
+        ctx.fillStyle = '#fff'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        const label = { '①': '1', '②': '2', '③': '3', '④': '4' }[num] || String(num)
+        ctx.fillText(label, position.x, position.y)
+        ctx.restore()
+      })
     }
 
     ctx.strokeStyle = '#0f172a'
@@ -272,7 +322,6 @@ export default function HiraganaModule({ onBack }) {
     const nextStrokeCount = strokeCount + 1
     setStrokeCount(nextStrokeCount)
 
-    // Validasi ketat: User wajib menyelesaikan seluruh jumlah guratan yang diminta
     if (nextStrokeCount < requiredStrokes) return
 
     const canvas = canvasRef.current
@@ -309,21 +358,20 @@ export default function HiraganaModule({ onBack }) {
       }
     }
 
-    // Validasi area coretan untuk mencegah asal coret (harus memenuhi luas minimum dan menyebar minimal di 2 kuadran)
-    if (totalPixels < 220) {
+    if (totalPixels < 350) {
       setAnalysisResult({ passed: false })
       return
     }
 
     const boxWidth = maxX - minX
     const boxHeight = maxY - minY
-    if (boxWidth < 60 || boxHeight < 60) {
+    if (boxWidth < 100 || boxHeight < 100) {
       setAnalysisResult({ passed: false })
       return
     }
 
-    const activeQuadrants = Object.values(quadrants).filter(p => p > 35).length
-    if (activeQuadrants < 2) {
+    const activeQuadrants = Object.values(quadrants).filter(p => p > 50).length
+    if (activeQuadrants < 3) {
       setAnalysisResult({ passed: false })
       return
     }
@@ -342,23 +390,42 @@ export default function HiraganaModule({ onBack }) {
 
   const currentVocab = vocabList[currentIndex]
   const targetStrokes = HIRAGANA_STRIKE_TARGETS[currentVocab?.hiragana] || 1
-  const isPassed = shuffledQuizList.length > 0 && quizScore >= Math.ceil(shuffledQuizList.length * 0.8)
-  const hasNextSession = ((quizSession + 1) * pageSize) < vocabList.length
+  const currentStrokeCount = Math.min(strokeCount, targetStrokes)
+  
+  const isPassed = shuffledQuizList.length > 0 && quizScore === shuffledQuizList.length
 
   const handleAnswer = (selectedOpt) => {
     const currentQuizItem = shuffledQuizList[quizIndex]
-    if (selectedOpt.id === currentQuizItem.id) {
-      setQuizScore(prev => prev + 1)
+    const isCorrect = selectedOpt.id === currentQuizItem.id
+    const newScore = isCorrect ? quizScore + 1 : quizScore
+
+    if (isCorrect) {
+      setQuizScore(newScore)
     }
+
     if (quizIndex + 1 < shuffledQuizList.length) {
       setQuizIndex(prev => prev + 1)
     } else {
       setQuizFinished(true)
+      if (newScore === shuffledQuizList.length) {
+        setQuizProgress(prev => {
+          const sessionData = prev[quizSession] || { visual: false, audio: false }
+          return {
+            ...prev,
+            [quizSession]: {
+              ...sessionData,
+              [quizMode]: true
+            }
+          }
+        })
+      }
     }
   }
 
+  const currentSessionProgress = quizProgress[quizSession] || { visual: false, audio: false }
+
   return (
-    <div className="flex-1 flex flex-col bg-slate-900 text-white px-4 py-6 max-w-md mx-auto w-full justify-start space-y-6 overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-900 text-white overflow-y-auto select-none pb-24">
       <style>{`
         @keyframes stampDrop {
           0% { transform: scale(2.2) rotate(-25deg); opacity: 0; filter: blur(8px); }
@@ -371,150 +438,254 @@ export default function HiraganaModule({ onBack }) {
         }
       `}</style>
 
-      <div className="w-full space-y-3 shrink-0">
-        <div className="flex justify-between items-center w-full">
-          <button onClick={onBack} className="px-3 py-1.5 bg-slate-800 rounded-lg text-xs border border-slate-700">← Kembali</button>
-          <h1 className="text-sm font-bold">🕵️‍♂️ Bab 1: Hiragana Dasar</h1>
+      {/* Konten Utama */}
+      <div className="flex-1 flex flex-col items-center justify-start px-4 py-8 max-w-md mx-auto w-full space-y-6">
+        
+        <div className="text-center">
+          <h1 className="text-xl sm:text-2xl font-black tracking-wide text-white drop-shadow">Bab 1: Hiragana Dasar</h1>
         </div>
-        <div className="flex justify-center gap-1.5 w-full pt-[5vh] sm:pt-[12vh]">
-          <button onClick={() => setActiveTab('flashcard')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'flashcard' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>📚 Flashcard</button>
-          <button onClick={() => setActiveTab('writing')} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'writing' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>✍️ Kuas</button>
-          <button onClick={() => { setActiveTab('quiz'); setQuizMode(null); }} className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${activeTab === 'quiz' ? 'bg-indigo-600' : 'bg-slate-800 text-slate-400'}`}>⚡ Kuis {quizSession+1}</button>
-        </div>
-      </div>
 
-      <div className="flex flex-col items-center justify-center w-full pt-2 pb-6">
-        {activeTab === 'flashcard' && (
-          <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
-            <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
-              onClick={() => { setIsFlipped(!isFlipped); speakJapanese(currentVocab.hiragana) }}
-              className={`w-full h-[380px] sm:h-[420px] cursor-pointer [perspective:1000px] transition-all duration-300 ${slideDirection}`}>
-              <div className={`relative w-full h-full duration-500 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
-                <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] border-2 border-indigo-500/50 bg-slate-900 overflow-hidden">
-                  <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/heiji.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/60"></div>
-                  <div className="relative z-10 space-y-2">
-                    <span className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold px-2 py-0.5 rounded-full bg-indigo-500/30 border border-indigo-500/40">Kartu {currentIndex+1}/{vocabList.length}</span>
-                    <h2 className="text-7xl sm:text-8xl font-extrabold text-white my-2 drop-shadow-lg">{currentVocab.hiragana}</h2>
-                    <p className="text-xs text-slate-300">✨ Klik untuk balik | Swipe</p>
+        {/* Menu Navigasi Model Floating Pill / Capsule */}
+        <div className="w-full max-w-[360px] mx-auto bg-slate-800/90 p-1.5 rounded-2xl flex items-center justify-between gap-1.5 shadow-xl border border-slate-700/80">
+          <button 
+            onClick={() => setActiveTab('flashcard')} 
+            className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+              activeTab === 'flashcard' 
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]' 
+                : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+            }`}
+          >
+            📚 Flashcard
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('writing')} 
+            className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+              activeTab === 'writing' 
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]' 
+                : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+            }`}
+          >
+            ✍️ Kuas
+          </button>
+          
+          <button 
+            onClick={() => { setActiveTab('quiz'); setQuizMode(null); setQuizFinished(false); setQuizScore(0); setQuizIndex(0); }} 
+            className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+              activeTab === 'quiz' 
+                ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]' 
+                : 'text-slate-400 hover:text-white hover:bg-slate-700/60'
+            }`}
+          >
+            ⚡ Kuis {quizSession+1}
+          </button>
+        </div>
+
+        <div className="flex flex-col items-center justify-center w-full pb-6">
+          {activeTab === 'flashcard' && (
+            <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
+              <div 
+                onTouchStart={handleTouchStart} 
+                onTouchMove={handleTouchMove} 
+                onTouchEnd={handleTouchEnd}
+                onClick={() => { setIsFlipped(!isFlipped); speakJapanese(currentVocab.hiragana) }}
+                className={`w-full h-[380px] sm:h-[420px] cursor-pointer [perspective:1000px] transition-all duration-300 ease-out transform ${slideAnim}`}
+              >
+                <div className={`relative w-full h-full duration-500 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
+                  <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] border-2 border-indigo-500/50 bg-slate-900 overflow-hidden shadow-2xl">
+                    <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/heiji.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/60"></div>
+                    <div className="relative z-10 space-y-2">
+                      <span className="text-[10px] uppercase tracking-widest text-indigo-300 font-bold px-2.5 py-1 rounded-full bg-indigo-500/30 border border-indigo-500/40">Kartu {currentIndex+1}/{vocabList.length}</span>
+                      <h2 className="text-7xl sm:text-8xl font-extrabold text-white my-2 drop-shadow-lg">{currentVocab.hiragana}</h2>
+                      <p className="text-xs text-slate-300">✨ Swipe kiri/kanan untuk navigasi</p>
+                    </div>
                   </div>
-                </div>
-                <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)] border-2 border-emerald-500/50 bg-slate-900 overflow-hidden">
-                  <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/heiji.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/65"></div>
-                  <div className="relative z-10 space-y-2">
-                    <h3 className="text-3xl font-extrabold text-emerald-300">{currentVocab.meaning_id}</h3>
-                    <p className="text-base text-emerald-200 font-mono">Romaji: [{currentVocab.romaji}]</p>
+                  <div className="absolute inset-0 w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center [backface-visibility:hidden] [transform:rotateY(180deg)] border-2 border-emerald-500/50 bg-slate-900 overflow-hidden shadow-2xl">
+                    <div className="absolute inset-0 opacity-40 bg-cover bg-center" style={{ backgroundImage: `url('/images/heiji.jpg')` }}></div><div className="absolute inset-0 bg-slate-950/65"></div>
+                    <div className="relative z-10 space-y-2">
+                      <h3 className="text-3xl font-extrabold text-emerald-300">{currentVocab.meaning_id}</h3>
+                      <p className="text-base text-emerald-200 font-mono">Romaji: [{currentVocab.romaji}]</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {activeTab === 'writing' && (
-          <div className="flex flex-col items-center justify-center w-full max-w-[360px] space-y-3">
-            <div className="text-center">
-              <p className="text-xs text-slate-300">Selesaikan semua guratan ({strokeCount}/{targetStrokes}):</p>
-              <div className="text-4xl font-black text-indigo-400">{currentVocab.hiragana}</div>
-            </div>
-
-            <div className="relative bg-white border-3 border-slate-700 rounded-2xl shadow-xl overflow-hidden cursor-crosshair w-full aspect-square">
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-full border-b border-dashed border-slate-300 absolute"></div>
-                <div className="h-full border-r border-dashed border-slate-300 absolute"></div>
+          {activeTab === 'writing' && (
+            <div className="flex flex-col items-center justify-center w-full max-w-[360px] space-y-3">
+              <div className="text-center">
+                <p className="text-xs text-slate-300">Selesaikan semua guratan ({strokeCount}/{targetStrokes}):</p>
+                <div className="text-4xl font-black text-indigo-400">{currentVocab.hiragana}</div>
               </div>
-              <canvas ref={canvasRef} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
-                className="touch-none block relative z-10 w-full h-full" />
 
-              {analysisResult && (
-                <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-slate-950/50 backdrop-blur-[3px] transition-all">
-                  {analysisResult.passed ? (
-                    <div className="border-[6px] border-purple-800 bg-white/95 px-6 py-3.5 rounded-2xl shadow-[0_20px_50px_rgba(91,33,182,0.4)] animate-stamp flex items-center gap-3.5">
-                      <img src="/images/detco.jpg" alt="SUGOI" className="w-[130px] h-[75px] object-cover rounded shadow-sm border border-purple-200" />
-                      <span className="text-purple-800 font-black text-3xl tracking-widest uppercase drop-shadow-sm">SUGOI!</span>
+              <StrokeOrderGuide character={currentVocab.hiragana} completedStrokes={currentStrokeCount} />
+
+              <div className="relative bg-white border-3 border-slate-700 rounded-2xl shadow-xl overflow-hidden cursor-crosshair w-full aspect-square">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-full border-b border-dashed border-slate-300 absolute"></div>
+                  <div className="h-full border-r border-dashed border-slate-300 absolute"></div>
+                </div>
+                <canvas ref={canvasRef} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
+                  className="touch-none block relative z-10 w-full h-full" />
+
+                {analysisResult && (
+                  <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none bg-slate-950/50 backdrop-blur-[3px] transition-all">
+                    {analysisResult.passed ? (
+                      <div className="border-[6px] border-purple-800 bg-white/95 px-6 py-3.5 rounded-2xl shadow-[0_20px_50px_rgba(91,33,182,0.4)] animate-stamp flex items-center gap-3.5">
+                        <img src="/images/detco.jpg" alt="SUGOI" className="w-[130px] h-[75px] object-cover rounded shadow-sm border border-purple-200" />
+                        <span className="text-purple-800 font-black text-3xl tracking-widest uppercase drop-shadow-sm">SUGOI!</span>
+                      </div>
+                    ) : (
+                      <div className="border-4 border-amber-600 text-amber-600 px-6 py-3 rounded-2xl text-2xl font-black uppercase tracking-widest shadow-2xl bg-white/95 animate-stamp">
+                        GAGAL / ULANGI
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 w-full">
+                <button onClick={() => { setStrokeCount(0); drawGuide(); }} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold shadow hover:bg-slate-700">🔄 Ulangi Coretan</button>
+                <button onClick={() => speakJapanese(currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm shadow hover:bg-slate-700">🔊</button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'quiz' && (
+            <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
+              {quizMode === null ? (
+                <div className="w-full bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4 shadow-xl">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs text-slate-400">
+                      <span className="font-bold text-white">Sesi Pembelajaran {quizSession + 1}</span>
+                      <span>{Math.ceil(vocabList.length / pageSize)} sesi</span>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {Array.from({ length: Math.ceil(vocabList.length / pageSize) }, (_, session) => (
+                        <button key={session} onClick={() => { setQuizSession(session); setQuizFinished(false); setQuizScore(0); setQuizIndex(0) }} className={`min-w-10 rounded-lg px-3 py-2 text-xs font-bold ${session === quizSession ? 'bg-violet-600 text-white' : (quizProgress[session]?.visual || quizProgress[session]?.audio) ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-700 text-slate-300'}`}>
+                          {session + 1}{quizProgress[session]?.visual || quizProgress[session]?.audio ? ' ✓' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <h2 className="text-base font-bold text-white">🎯 Pilih Tahap Kuis Sesi {quizSession + 1}</h2>
+                  
+                  <div className="grid grid-cols-1 gap-3 pt-2">
+                    <button 
+                      onClick={() => { setQuizMode('visual'); setQuizFinished(false); setQuizScore(0); setQuizIndex(0); }} 
+                      className={`py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-between gap-2 shadow-md transition-all active:scale-95 ${
+                        currentSessionProgress.visual ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-slate-700 hover:bg-indigo-600'
+                      }`}
+                    >
+                      <span>1. 👁️ Mode Visual (Tebak Romaji)</span>
+                      {currentSessionProgress.visual ? (
+                        <span className="text-xs bg-emerald-500/40 px-2 py-0.5 rounded-full">Selesai 5/5 ✓</span>
+                      ) : (
+                        <span className="text-xs bg-indigo-500/40 px-2 py-0.5 rounded-full">Mulai</span>
+                      )}
+                    </button>
+
+                    <button 
+                      onClick={() => { setQuizMode('audio'); setQuizFinished(false); setQuizScore(0); setQuizIndex(0); }} 
+                      className={`py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-between gap-2 shadow-md transition-all active:scale-95 ${
+                        currentSessionProgress.audio 
+                            ? 'bg-emerald-700 hover:bg-emerald-600' 
+                            : 'bg-slate-700 hover:bg-indigo-600'
+                      }`}
+                    >
+                      <span>2. 🎧 Mode Audio (Tebak Suara)</span>
+                      {currentSessionProgress.audio ? (
+                        <span className="text-xs bg-emerald-500/40 px-2 py-0.5 rounded-full">Selesai 5/5 ✓</span>
+                      ) : (
+                        <span className="text-xs bg-indigo-500/40 px-2 py-0.5 rounded-full">Mulai</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : !quizFinished ? (
+                <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-xl">
+                  <div className="flex justify-between items-center text-xs text-slate-400">
+                    <button onClick={() => setQuizMode(null)} className="text-indigo-400 hover:underline">← Kembali ke Menu Tahap</button>
+                    <span>Sesi {quizSession+1} [{quizMode === 'visual' ? 'Romaji' : 'Audio'}] • {quizIndex+1}/{shuffledQuizList.length}</span>
+                  </div>
+
+                  {quizMode === 'visual' ? (
+                    <div className="space-y-3">
+                      <div className="flex justify-end"><button onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)} className="text-indigo-400 text-sm">🔊</button></div>
+                      <div className="text-center"><p className="text-xs text-slate-400">Pilih romaji:</p><div className="text-6xl font-extrabold my-2">{shuffledQuizList[quizIndex]?.hiragana}</div></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {shuffledOptions.map((opt, i) => (
+                          <button key={i} onClick={() => handleAnswer(opt)} className="py-3 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm text-white shadow-md active:scale-95">{opt.romaji}</button>
+                        ))}
+                      </div>
                     </div>
                   ) : (
-                    <div className="border-4 border-amber-600 text-amber-600 px-6 py-3 rounded-2xl text-2xl font-black uppercase tracking-widest shadow-2xl bg-white/95 animate-stamp">
-                      GAGAL / ULANGI
+                    <div className="space-y-3">
+                      <div className="flex flex-col items-center justify-center py-6 bg-slate-900/80 border border-slate-700/80 rounded-xl space-y-3">
+                        <button 
+                          onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)}
+                          className="w-16 h-16 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-2xl shadow-lg transition-transform active:scale-95">
+                          🔊
+                        </button>
+                        <p className="text-xs text-slate-300 font-medium">Putar Rekaman Suara</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {shuffledOptions.map((opt, i) => (
+                          <button 
+                            key={i} 
+                            onClick={() => handleAnswer(opt)} 
+                            className="py-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-black text-xl text-white transition-all shadow-md active:scale-95">
+                            {opt.hiragana}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl text-center space-y-3 shadow-xl">
+                  <h2 className="text-xl font-bold text-emerald-400">Kuis Selesai! 🎉</h2>
+                  <div className="text-3xl font-black text-indigo-400">{quizScore}/{shuffledQuizList.length}</div>
+                  
+                  {isPassed ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-emerald-300 font-semibold">Sempurna! Tahap {quizMode === 'visual' ? 'Romaji' : 'Tebak Suara'} Sesi {quizSession+1} Berhasil Dituntaskan.</p>
+                      
+                      <button
+                        onClick={() => { setQuizFinished(false); setQuizScore(0); setQuizIndex(0); setQuizMode(null); }}
+                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-bold shadow-lg transition"
+                      >
+                        Kembali ke Menu Kuis
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-amber-400 font-semibold">Belum 5/5! Kamu harus mendapatkan skor sempurna untuk lulus.</p>
+                      <button 
+                        onClick={() => { setQuizFinished(false); setQuizScore(0); setQuizIndex(0); }} 
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-bold shadow-lg transition"
+                      >
+                        Ulangi Kuis 🔄
+                      </button>
                     </div>
                   )}
                 </div>
               )}
             </div>
+          )}
+        </div>
+      </div>
 
-            <div className="flex gap-2 w-full">
-              <button onClick={() => { setStrokeCount(0); drawGuide(); }} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold">🔄 Ulangi Corekan</button>
-              <button onClick={() => speakJapanese(currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'quiz' && (
-          <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
-            {quizMode === null ? (
-              <div className="w-full bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4 shadow-xl">
-                <h2 className="text-base font-bold text-white">🎯 Pilih Mode Investigasi Kuis</h2>
-                <div className="grid grid-cols-1 gap-3 pt-2">
-                  <button onClick={() => setQuizMode('visual')} className="py-3.5 px-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-md transition-all active:scale-95">
-                    👁️ Mode Visual (Tebak Romaji)
-                  </button>
-                  <button onClick={() => setQuizMode('audio')} className="py-3.5 px-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 shadow-md transition-all active:scale-95">
-                    🎧 Mode Audio (Dengar Suara)
-                  </button>
-                </div>
-              </div>
-            ) : !quizFinished ? (
-              <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-xl">
-                <div className="flex justify-between items-center text-xs text-slate-400">
-                  <button onClick={() => setQuizMode(null)} className="text-indigo-400 hover:underline">← Ganti Mode</button>
-                  <span>Sesi {quizSession+1} • {quizIndex+1}/{shuffledQuizList.length}</span>
-                </div>
-
-                {quizMode === 'visual' ? (
-                  <div className="space-y-3">
-                    <div className="flex justify-end"><button onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)} className="text-indigo-400 text-sm">🔊</button></div>
-                    <div className="text-center"><p className="text-xs text-slate-400">Pilih romaji:</p><div className="text-6xl font-extrabold my-2">{shuffledQuizList[quizIndex]?.hiragana}</div></div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {shuffledOptions.map((opt, i) => (
-                        <button key={i} onClick={() => handleAnswer(opt)} className="py-3 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm text-white shadow-md active:scale-95">{opt.romaji}</button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex flex-col items-center justify-center py-6 bg-slate-900/80 border border-slate-700/80 rounded-xl space-y-3">
-                      <button 
-                        onClick={() => speakJapanese(shuffledQuizList[quizIndex].hiragana)}
-                        className="w-16 h-16 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-2xl shadow-lg transition-transform active:scale-95">
-                        🔊
-                      </button>
-                      <p className="text-xs text-slate-300 font-medium">Putar Rekaman Suara</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      {shuffledOptions.map((opt, i) => (
-                        <button 
-                          key={i} 
-                          onClick={() => handleAnswer(opt)} 
-                          className="py-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-black text-xl text-white transition-all shadow-md active:scale-95">
-                          {opt.hiragana}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl text-center space-y-3">
-                <h2 className="text-xl font-bold text-emerald-400">Kuis Selesai! 🎉</h2>
-                <div className="text-3xl font-black text-indigo-400">{quizScore}/{shuffledQuizList.length}</div>
-                {isPassed && hasNextSession ? (
-                  <button onClick={() => setQuizSession(p => p + 1)} className="w-full py-3 bg-emerald-600 rounded-xl text-sm font-bold shadow-lg">Lanjut Sesi →</button>
-                ) : (
-                  <button onClick={() => { setQuizFinished(false); setQuizScore(0); setQuizIndex(0); setQuizMode(null); }} className="w-full py-3 bg-indigo-600 rounded-xl text-sm font-bold shadow-lg">Ulangi Kuis</button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+      {/* Floating Bottom Bar untuk Tombol Kembali */}
+      <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 py-3 px-6 flex justify-center items-center z-50 shadow-2xl">
+        <button 
+          onClick={onBack}
+          className="w-full max-w-sm py-3 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg border border-slate-700 text-slate-200"
+        >
+          <span>←</span> Kembali ke Menu Utama
+        </button>
       </div>
     </div>
   )
