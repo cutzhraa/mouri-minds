@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import StrokeOrderGuide from '../components/StrokeOrderGuide'
 import QuizStageMenu from '../components/QuizStageMenu'
+import { getExpectedStrokeCount, getStrokeNumberGroups, validateStrokeOrder } from '../lib/strokeOrderValidation'
 
 export default function KanjiModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -11,8 +12,12 @@ export default function KanjiModule({ onBack }) {
   const [activeTab, setActiveTab] = useState('flashcard')
   const [slideDirection, setSlideDirection] = useState('translate-x-0 opacity-100')
   const canvasRef = useRef(null)
+  const strokePathsRef = useRef([])
   const [isDrawing, setIsDrawing] = useState(false)
   const [strokeCount, setStrokeCount] = useState(0)
+  const [referenceStrokeCount, setReferenceStrokeCount] = useState(null)
+  const [strokeNumberGroups, setStrokeNumberGroups] = useState([])
+  const [strokeGuideLoading, setStrokeGuideLoading] = useState(true)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [quizScore, setQuizScore] = useState(0)
   const [quizIndex, setQuizIndex] = useState(0)
@@ -173,32 +178,50 @@ export default function KanjiModule({ onBack }) {
   const drawGuide = () => {
     const canvas = canvasRef.current
     if (!canvas || vocabList.length === 0) return
-    canvas.width = 340
-    canvas.height = 340
+    strokePathsRef.current = []
+    canvas.width = 480
+    canvas.height = 480
     const ctx = canvas.getContext('2d')
     ctx.clearRect(0,0,canvas.width,canvas.height)
     const cur = vocabList[currentIndex]
     ctx.save()
-    ctx.font = 'bold 200px sans-serif'
+    const characters = Array.from((cur?.hiragana || '').normalize('NFKC'))
+    const glyphGap = 28
+    const fontSize = Math.min(220, 390 / Math.max(1, characters.length))
+    const glyphAdvance = fontSize + glyphGap
+    const textWidth = characters.length * fontSize + Math.max(0, characters.length - 1) * glyphGap
+    const firstCenterX = (canvas.width - textWidth) / 2 + fontSize / 2
+    ctx.font = `bold ${fontSize}px sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.strokeStyle = '#475569'
     ctx.lineWidth = 5
     ctx.setLineDash([12,12])
-    ctx.strokeText(cur?.hiragana, canvas.width/2, canvas.height/2)
+    characters.forEach((character, index) => {
+      ctx.strokeText(character, firstCenterX + index * glyphAdvance, canvas.height / 2)
+    })
     ctx.restore()
 
-    const scale = 340/240
-    ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-    const drawBadge = (num,x,y) => {
-      ctx.beginPath(); ctx.arc(x*scale, y*scale, 13, 0, 2*Math.PI)
+    ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    const drawBadge = (num, x, y, radius) => {
+      ctx.beginPath(); ctx.arc(x, y, radius, 0, 2*Math.PI)
       ctx.fillStyle = '#dc2626'; ctx.fill()
-      ctx.fillStyle = '#fff'; ctx.fillText(num, x*scale, y*scale+1)
+      ctx.fillStyle = '#fff'; ctx.fillText(String(num), x, y + 1)
     }
 
-    const points = KANJI_GUIDES[cur?.hiragana]
-    if (points) {
-      points.forEach(([n,x,y]) => drawBadge(n,x,y))
+    if (strokeNumberGroups.length === characters.length && strokeNumberGroups.every(group => group.numbers.length)) {
+      let order = 1
+      const scale = fontSize / 109
+      strokeNumberGroups.forEach((group, characterIndex) => {
+        const centerX = firstCenterX + characterIndex * glyphAdvance
+        group.numbers.forEach(({ x, y }) => {
+          drawBadge(order++, centerX + (x - 54.5) * scale, canvas.height / 2 + (y - 54.5) * scale, Math.max(7, Math.min(12, 12 * scale)))
+        })
+      })
+    } else {
+      const points = KANJI_GUIDES[cur?.hiragana]
+      const scale = canvas.width / 240
+      if (points) points.forEach(([num, x, y], index) => drawBadge(index + 1, x * scale, y * scale, 12))
     }
 
     ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 18; ctx.lineCap = 'round'; ctx.lineJoin = 'round'
@@ -211,7 +234,27 @@ export default function KanjiModule({ onBack }) {
       drawGuide() 
     }
     if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current)
-  }, [activeTab, currentIndex, vocabList])
+  }, [activeTab, currentIndex, vocabList, strokeNumberGroups])
+
+  useEffect(() => {
+    let cancelled = false
+    const character = vocabList[currentIndex]?.hiragana
+    setStrokeGuideLoading(true)
+    Promise.all([getExpectedStrokeCount(character), getStrokeNumberGroups(character)]).then(([count, numberGroups]) => {
+      if (!cancelled) {
+        setReferenceStrokeCount(count)
+        setStrokeNumberGroups(numberGroups)
+        setStrokeGuideLoading(false)
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setReferenceStrokeCount(null)
+        setStrokeNumberGroups([])
+        setStrokeGuideLoading(false)
+      }
+    })
+    return () => { cancelled = true }
+  }, [vocabList, currentIndex])
 
   const getPos = (e) => {
     const rect = canvasRef.current.getBoundingClientRect()
@@ -229,6 +272,7 @@ export default function KanjiModule({ onBack }) {
     ctx.beginPath(); ctx.moveTo(x,y)
     setIsDrawing(true)
     setAnalysisResult(null)
+    strokePathsRef.current.push([{ x, y }])
   }
 
   const draw = (e) => {
@@ -236,76 +280,28 @@ export default function KanjiModule({ onBack }) {
     const ctx = canvasRef.current.getContext('2d')
     const {x,y} = getPos(e)
     ctx.lineTo(x,y); ctx.stroke()
+    strokePathsRef.current[strokePathsRef.current.length - 1]?.push({ x, y })
   }
 
-  const stopDrawing = () => {
+  const stopDrawing = async () => {
     if (!isDrawing) return
     setIsDrawing(false)
 
     const currentLetter = vocabList[currentIndex]?.hiragana
-    const requiredStrokes = KANJI_STRIKE_TARGETS[currentLetter] || 3
+    const requiredStrokes = referenceStrokeCount ?? KANJI_STRIKE_TARGETS[currentLetter] ?? 3
     const nextStrokeCount = strokeCount + 1
     setStrokeCount(nextStrokeCount)
 
     if (nextStrokeCount < requiredStrokes) return
 
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    const width = canvas.width
-    const height = canvas.height
-    const imgData = ctx.getImageData(0, 0, width, height)
-    
-    let totalPixels = 0
-    let minX = width, maxX = 0, minY = height, maxY = 0
-    let quadrants = { q1: 0, q2: 0, q3: 0, q4: 0 }
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const index = (y * width + x) * 4 + 3
-        if (imgData.data[index] > 128) {
-          const r = imgData.data[index-3]
-          const g = imgData.data[index-2]
-          const b = imgData.data[index-1]
-          if (r < 100 && g < 100 && b < 100) {
-            totalPixels++
-            if (x < minX) minX = x
-            if (x > maxX) maxX = x
-            if (y < minY) minY = y
-            if (y > maxY) maxY = y
-
-            if (x < width / 2 && y < height / 2) quadrants.q1++
-            else if (x >= width / 2 && y < height / 2) quadrants.q2++
-            else if (x < width / 2 && y >= height / 2) quadrants.q3++
-            else quadrants.q4++
-          }
-        }
-      }
-    }
-
-    if (totalPixels < 150) {
-      setAnalysisResult({ passed: false })
-      return
-    }
-
-    const boxWidth = maxX - minX
-    const boxHeight = maxY - minY
-    if (boxWidth < 45 || boxHeight < 45) {
-      setAnalysisResult({ passed: false })
-      return
-    }
-
-    const activeQuadrants = Object.values(quadrants).filter(p => p > 25).length
-    if (activeQuadrants < 2) {
-      setAnalysisResult({ passed: false })
-      return
-    }
-
-    setAnalysisResult({ passed: true })
+    const passed = await validateStrokeOrder(currentLetter, strokePathsRef.current).catch(() => false)
+    setAnalysisResult({ passed })
+    if (!passed) return
 
     finishTimeoutRef.current = setTimeout(() => {
       setAnalysisResult(null)
       setStrokeCount(0)
+      strokePathsRef.current = []
       setActiveTab('flashcard')
     }, 1800)
   }
@@ -314,7 +310,7 @@ export default function KanjiModule({ onBack }) {
   if (vocabList.length === 0) return <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 text-white"><p className="text-xs">Belum ada data Kanji.</p><button onClick={onBack} className="px-3 py-1.5 bg-indigo-600 rounded-xl text-xs">Kembali</button></div>
 
   const currentVocab = vocabList[currentIndex]
-  const targetStrokes = KANJI_STRIKE_TARGETS[currentVocab?.hiragana] || 3
+  const targetStrokes = referenceStrokeCount ?? KANJI_STRIKE_TARGETS[currentVocab?.hiragana] ?? 3
   const currentStrokeCount = Math.min(strokeCount, targetStrokes)
   const isPassed = shuffledQuizList.length > 0 && quizScore === shuffledQuizList.length
 
@@ -356,7 +352,7 @@ export default function KanjiModule({ onBack }) {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-start px-4 py-2 pb-24 max-w-md mx-auto w-full">
+      <div className="flex-1 flex flex-col items-center justify-start px-4 py-2 pb-24 max-w-2xl mx-auto w-full">
         {activeTab === 'flashcard' && (
           <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
             <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
@@ -396,7 +392,7 @@ export default function KanjiModule({ onBack }) {
         )}
 
         {activeTab === 'writing' && (
-          <div className="flex flex-col items-center justify-center w-full max-w-[360px] space-y-3">
+          <div className="flex flex-col items-center justify-center w-full max-w-[520px] space-y-3">
             <div className="text-center">
               <p className="text-xs text-slate-300">Selesaikan semua guratan ({strokeCount}/{targetStrokes}):</p>
               <div className="text-4xl font-black text-indigo-400">{currentVocab.hiragana}</div>
@@ -410,7 +406,7 @@ export default function KanjiModule({ onBack }) {
                 <div className="h-full border-r border-dashed border-slate-300 absolute"></div>
               </div>
               <canvas ref={canvasRef} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
-                className="touch-none block relative z-10 w-full h-full" />
+                className={`touch-none block relative z-10 w-full h-full ${strokeGuideLoading ? 'pointer-events-none' : ''}`} />
 
               {/* STEMPEL DENGAN TEMA HIJAU TOSKA GELAP (DARK TEAL / EMERALD) */}
               {analysisResult && (
@@ -430,7 +426,7 @@ export default function KanjiModule({ onBack }) {
             </div>
 
             <div className="flex gap-2 w-full">
-              <button onClick={() => { setStrokeCount(0); drawGuide(); }} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold"> 🔄 🔄 Ulangi Coretan</button>
+              <button onClick={() => { setStrokeCount(0); drawGuide(); }} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold"> 🔄 Ulangi Coretan</button>
               <button onClick={() => speakJapanese(readings[0] || currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button>
             </div>
           </div>

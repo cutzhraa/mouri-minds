@@ -2,6 +2,7 @@
 import { supabase } from '../lib/supabase'
 import StrokeOrderGuide from '../components/StrokeOrderGuide'
 import QuizStageMenu from '../components/QuizStageMenu'
+import { getExpectedStrokeCount, validateStrokeOrder } from '../lib/strokeOrderValidation'
 
 export default function KatakanaModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -13,6 +14,7 @@ export default function KatakanaModule({ onBack }) {
   const canvasRef = useRef(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [strokeCount, setStrokeCount] = useState(0)
+  const [referenceStrokeCount, setReferenceStrokeCount] = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [quizScore, setQuizScore] = useState(0)
   const [quizIndex, setQuizIndex] = useState(0)
@@ -153,6 +155,14 @@ export default function KatakanaModule({ onBack }) {
     if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current)
   }, [activeTab, currentIndex, vocabList])
 
+  useEffect(() => {
+    let cancelled = false
+    getExpectedStrokeCount(vocabList[currentIndex]?.hiragana).then(count => {
+      if (!cancelled) setReferenceStrokeCount(count)
+    }).catch(() => { if (!cancelled) setReferenceStrokeCount(null) })
+    return () => { cancelled = true }
+  }, [vocabList, currentIndex])
+
   const getPos = (e) => {
     const rect = canvasRef.current.getBoundingClientRect()
     const scaleX = canvasRef.current.width / rect.width
@@ -177,64 +187,17 @@ export default function KatakanaModule({ onBack }) {
     strokePathsRef.current[strokePathsRef.current.length-1].push({x,y})
   }
 
-  const stopDrawing = () => {
+  const stopDrawing = async () => {
     if (!isDrawing) return
     setIsDrawing(false)
     const currentLetter = vocabList[currentIndex]?.hiragana
-    const requiredStrokes = KATAKANA_STRIKE_TARGETS[currentLetter] || 2
+    const requiredStrokes = referenceStrokeCount ?? KATAKANA_STRIKE_TARGETS[currentLetter] ?? 2
     const nextStrokeCount = strokeCount + 1
     setStrokeCount(nextStrokeCount)
     if (nextStrokeCount < requiredStrokes) return
 
-    const guides = KATAKANA_GUIDES[currentLetter]
-    if (!guides || strokePathsRef.current.length !== requiredStrokes) {
-      setAnalysisResult({ passed: false })
-      setTimeout(() => {
-        setAnalysisResult(null); setStrokeCount(0); strokePathsRef.current=[]; drawGuide()
-      }, 800)
-      return
-    }
-
-    const strokeCenters = strokePathsRef.current.map(path => {
-      if (path.length < 5) return null
-      const xs = path.map(p=>p.x), ys = path.map(p=>p.y)
-      const minX = Math.min(...xs), maxX = Math.max(...xs)
-      const minY = Math.min(...ys), maxY = Math.max(...ys)
-      const len = Math.hypot(maxX-minX, maxY-minY)
-      if (len < 25) return null
-      return { x: (minX+maxX)/2, y: (minY+maxY)/2 }
-    })
-
-    if (strokeCenters.includes(null)) {
-      setAnalysisResult({ passed: false })
-      setTimeout(() => {
-        setAnalysisResult(null); setStrokeCount(0); strokePathsRef.current=[]; drawGuide()
-      }, 800)
-      return
-    }
-
-    const scale = 340/240
-    let allMatched = true
-    const usedStrokeIdx = new Set()
-
-    for (let [num, gx, gy] of guides) {
-      const targetX = gx * scale
-      const targetY = gy * scale
-      let bestDist = Infinity
-      let bestIdx = -1
-      strokeCenters.forEach((center, idx) => {
-        if (usedStrokeIdx.has(idx)) return
-        const dist = Math.hypot(center.x - targetX, center.y - targetY)
-        if (dist < bestDist) { bestDist = dist; bestIdx = idx }
-      })
-      if (bestDist > 95 || bestIdx === -1) {
-        allMatched = false
-        break
-      }
-      usedStrokeIdx.add(bestIdx)
-    }
-
-    if (!allMatched) {
+    const passed = await validateStrokeOrder(currentLetter, strokePathsRef.current).catch(() => false)
+    if (!passed) {
       setAnalysisResult({ passed: false })
       setTimeout(() => {
         setAnalysisResult(null); setStrokeCount(0); strokePathsRef.current=[]; drawGuide()
@@ -252,7 +215,7 @@ export default function KatakanaModule({ onBack }) {
   if (vocabList.length === 0) return <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 text-white"><p className="text-xs">Belum ada data Katakana.</p><button onClick={onBack} className="px-3 py-1.5 bg-indigo-600 rounded-xl text-xs">Kembali</button></div>
 
   const currentVocab = vocabList[currentIndex]
-  const targetStrokes = KATAKANA_STRIKE_TARGETS[currentVocab?.hiragana] || 2
+  const targetStrokes = referenceStrokeCount ?? KATAKANA_STRIKE_TARGETS[currentVocab?.hiragana] ?? 2
   const currentStrokeCount = Math.min(strokeCount, targetStrokes)
   const isPassed = shuffledQuizList.length > 0 && quizScore === shuffledQuizList.length
   const handleAnswer = (selectedOpt) => {
@@ -306,7 +269,7 @@ export default function KatakanaModule({ onBack }) {
                 </div>
               )}
             </div>
-            <div className="flex gap-2 w-full"><button onClick={() => { setStrokeCount(0); drawGuide(); }} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold">🔄 🔄 Ulangi Coretan</button><button onClick={() => speakJapanese(currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button></div>
+            <div className="flex gap-2 w-full"><button onClick={() => { setStrokeCount(0); drawGuide(); }} className="flex-1 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold">🔄 Ulangi Coretan</button><button onClick={() => speakJapanese(currentVocab.hiragana)} className="py-3 px-4 bg-slate-800 border border-slate-700 rounded-xl text-sm">🔊</button></div>
           </div>
         )}
         {activeTab === 'quiz' && (

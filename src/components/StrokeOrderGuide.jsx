@@ -40,22 +40,26 @@ export default function StrokeOrderGuide({ character, completedStrokes = 0 }) {
   return (
     <div className="w-full bg-slate-800/90 border border-slate-700/80 p-3 rounded-2xl shadow-md space-y-2">
       <p className="text-[11px] text-indigo-200 font-bold text-center">Contoh urutan guratan</p>
-      {strokeGroups.map(({ character: kana, strokes }) => {
+      {strokeGroups.map(({ character: kana, strokes }, groupIndex) => {
         if (!strokes.length) {
           return <p key={kana} className="text-[11px] text-amber-300 text-center">Contoh untuk {kana} belum tersedia.</p>
         }
 
         const columns = strokes.length > 3 ? 2 : strokes.length
         const isSingleCharacter = characters.length === 1
+        const groupStrokeOffset = strokeGroups
+          .slice(0, groupIndex)
+          .reduce((total, group) => total + group.strokes.length, 0)
 
         return (
           <div key={kana} className="space-y-1.5">
             {characters.length > 1 && <p className="text-xs font-bold text-slate-200 text-center">{kana}</p>}
             <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}>
               {strokes.map((_, strokeIndex) => {
+                const globalStrokeNumber = groupStrokeOffset + strokeIndex + 1
                 const isActive = isSingleCharacter
                   ? completedStrokes === strokeIndex
-                  : completedStrokes === 0 && strokeIndex === 0
+                  : completedStrokes === globalStrokeNumber - 1
 
                 return (
                   <div
@@ -66,7 +70,7 @@ export default function StrokeOrderGuide({ character, completedStrokes = 0 }) {
                   >
                     <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center ${
                       isActive ? 'bg-red-600 text-white' : 'bg-slate-700 text-slate-200'
-                    }`}>{strokeIndex + 1}</span>
+                    }`}>{globalStrokeNumber}</span>
                     <svg viewBox="0 0 109 109" className="w-full h-14 bg-slate-950 rounded-lg p-1" aria-label={`Contoh guratan ${strokeIndex + 1} untuk ${kana}`}>
                       {strokes.map((path, index) => (
                         <path
@@ -81,7 +85,7 @@ export default function StrokeOrderGuide({ character, completedStrokes = 0 }) {
                         />
                       ))}
                     </svg>
-                    <span className="text-[9px] font-bold text-slate-200">Guratan {strokeIndex + 1}</span>
+                    <span className="text-[9px] font-bold text-slate-200">Guratan {globalStrokeNumber}</span>
                   </div>
                 )
               })}

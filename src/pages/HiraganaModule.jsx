@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import StrokeOrderGuide from '../components/StrokeOrderGuide'
+import { getExpectedStrokeCount, validateStrokeOrder } from '../lib/strokeOrderValidation'
 
 export default function HiraganaModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -10,8 +11,10 @@ export default function HiraganaModule({ onBack }) {
   const [activeTab, setActiveTab] = useState('flashcard')
   const [slideAnim, setSlideAnim] = useState('opacity-100 scale-100 translate-x-0')
   const canvasRef = useRef(null)
+  const strokePathsRef = useRef([])
   const [isDrawing, setIsDrawing] = useState(false)
   const [strokeCount, setStrokeCount] = useState(0)
+  const [referenceStrokeCount, setReferenceStrokeCount] = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [quizScore, setQuizScore] = useState(0)
   const [quizIndex, setQuizIndex] = useState(0)
@@ -215,6 +218,7 @@ export default function HiraganaModule({ onBack }) {
   const drawGuide = () => {
     const canvas = canvasRef.current
     if (!canvas || vocabList.length === 0) return
+    strokePathsRef.current = []
     canvas.width = 340
     canvas.height = 340
     const ctx = canvas.getContext('2d')
@@ -288,6 +292,14 @@ export default function HiraganaModule({ onBack }) {
     if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current)
   }, [activeTab, currentIndex, vocabList])
 
+  useEffect(() => {
+    let cancelled = false
+    getExpectedStrokeCount(vocabList[currentIndex]?.hiragana).then(count => {
+      if (!cancelled) setReferenceStrokeCount(count)
+    }).catch(() => { if (!cancelled) setReferenceStrokeCount(null) })
+    return () => { cancelled = true }
+  }, [vocabList, currentIndex])
+
   const getPos = (e) => {
     const rect = canvasRef.current.getBoundingClientRect()
     const scaleX = canvasRef.current.width / rect.width
@@ -304,6 +316,7 @@ export default function HiraganaModule({ onBack }) {
     ctx.beginPath(); ctx.moveTo(x, y)
     setIsDrawing(true)
     setAnalysisResult(null)
+    strokePathsRef.current.push([{ x, y }])
   }
 
   const draw = (e) => {
@@ -311,76 +324,28 @@ export default function HiraganaModule({ onBack }) {
     const ctx = canvasRef.current.getContext('2d')
     const {x, y} = getPos(e)
     ctx.lineTo(x, y); ctx.stroke()
+    strokePathsRef.current[strokePathsRef.current.length - 1]?.push({ x, y })
   }
 
-  const stopDrawing = () => {
+  const stopDrawing = async () => {
     if (!isDrawing) return
     setIsDrawing(false)
 
     const currentLetter = vocabList[currentIndex]?.hiragana
-    const requiredStrokes = HIRAGANA_STRIKE_TARGETS[currentLetter] || 1
+    const requiredStrokes = referenceStrokeCount ?? HIRAGANA_STRIKE_TARGETS[currentLetter] ?? 1
     const nextStrokeCount = strokeCount + 1
     setStrokeCount(nextStrokeCount)
 
     if (nextStrokeCount < requiredStrokes) return
 
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    const width = canvas.width
-    const height = canvas.height
-    const imgData = ctx.getImageData(0, 0, width, height)
-    
-    let totalPixels = 0
-    let minX = width, maxX = 0, minY = height, maxY = 0
-    let quadrants = { q1: 0, q2: 0, q3: 0, q4: 0 }
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const index = (y * width + x) * 4 + 3
-        if (imgData.data[index] > 128) {
-          const r = imgData.data[index-3]
-          const g = imgData.data[index-2]
-          const b = imgData.data[index-1]
-          if (r < 100 && g < 100 && b < 100) {
-            totalPixels++
-            if (x < minX) minX = x
-            if (x > maxX) maxX = x
-            if (y < minY) minY = y
-            if (y > maxY) maxY = y
-
-            if (x < width / 2 && y < height / 2) quadrants.q1++
-            else if (x >= width / 2 && y < height / 2) quadrants.q2++
-            else if (x < width / 2 && y >= height / 2) quadrants.q3++
-            else quadrants.q4++
-          }
-        }
-      }
-    }
-
-    if (totalPixels < 350) {
-      setAnalysisResult({ passed: false })
-      return
-    }
-
-    const boxWidth = maxX - minX
-    const boxHeight = maxY - minY
-    if (boxWidth < 100 || boxHeight < 100) {
-      setAnalysisResult({ passed: false })
-      return
-    }
-
-    const activeQuadrants = Object.values(quadrants).filter(p => p > 50).length
-    if (activeQuadrants < 3) {
-      setAnalysisResult({ passed: false })
-      return
-    }
-
-    setAnalysisResult({ passed: true })
+    const passed = await validateStrokeOrder(currentLetter, strokePathsRef.current).catch(() => false)
+    setAnalysisResult({ passed })
+    if (!passed) return
 
     finishTimeoutRef.current = setTimeout(() => {
       setAnalysisResult(null)
       setStrokeCount(0)
+      strokePathsRef.current = []
       setActiveTab('flashcard')
     }, 1800)
   }
@@ -389,7 +354,7 @@ export default function HiraganaModule({ onBack }) {
   if (vocabList.length === 0) return <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 text-white"><p className="text-xs">Belum ada data.</p><button onClick={onBack} className="px-3 py-1.5 bg-indigo-600 rounded-xl text-xs">Kembali</button></div>
 
   const currentVocab = vocabList[currentIndex]
-  const targetStrokes = HIRAGANA_STRIKE_TARGETS[currentVocab?.hiragana] || 1
+  const targetStrokes = referenceStrokeCount ?? HIRAGANA_STRIKE_TARGETS[currentVocab?.hiragana] ?? 1
   const currentStrokeCount = Math.min(strokeCount, targetStrokes)
   
   const isPassed = shuffledQuizList.length > 0 && quizScore === shuffledQuizList.length
