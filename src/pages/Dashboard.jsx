@@ -153,6 +153,17 @@ export default function Dashboard({ session }) {
               <div className="mt-3 flex items-center justify-between gap-4"><div><h3 className="text-xl font-black sm:text-2xl">Lanjutkan {moduleTitle(overview.lastModule)} →</h3><p className="mt-1 text-sm text-indigo-100/80">Teruskan belajar dari modul terakhir yang dibuka</p></div><span className="text-4xl transition group-hover:translate-x-1">{moduleIcon(overview.lastModule)}</span></div>
             </button>
 
+            <section className="flex flex-col gap-4 rounded-3xl border border-amber-400/20 bg-slate-800/80 p-5 shadow-lg sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-300">Dukungan</p>
+                <h3 className="mt-1 text-lg font-extrabold">Belajar bareng Mouri Minds? ☕</h3>
+                <p className="mt-1 max-w-xl text-sm text-slate-400">Kalau aplikasi ini bermanfaat, boleh traktir pembuatnya kopi lewat Saweria. Dukunganmu bikin semangat mengembangkan Mouri Minds!</p>
+              </div>
+              <a href="https://saweria.co/cutzhraa" target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 py-3 text-sm font-extrabold text-slate-950 shadow-lg shadow-amber-900/20 transition hover:bg-amber-300 active:scale-95">
+                ☕ Traktir kopi <span aria-hidden="true">↗</span>
+              </a>
+            </section>
+
             <p className="px-1 text-xs text-slate-500">Masuk sebagai {session.user.email}</p>
           </main>
         )}
