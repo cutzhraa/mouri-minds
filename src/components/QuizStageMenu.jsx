@@ -5,7 +5,9 @@ export default function QuizStageMenu({
   onSelectSession,
   onStartMode,
   visualLabel,
-  audioLabel
+  audioLabel,
+  drawingLabel = 'Kuis Tulis (Drawing Challenge)',
+  showDrawing = false
 }) {
   return (
     <div className="w-full bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4 shadow-xl">
@@ -16,7 +18,7 @@ export default function QuizStageMenu({
         </div>
         <div className="flex flex-wrap justify-center gap-2" aria-label="Pilih sesi kuis">
           {Array.from({ length: sessionCount }, (_, index) => {
-            const completed = progress[index]?.visual || progress[index]?.audio
+            const completed = progress[index]?.visual || progress[index]?.audio || progress[index]?.drawing
             return (
               <button
                 key={index}
@@ -41,7 +43,7 @@ export default function QuizStageMenu({
       <h2 className="text-base font-bold text-white">🎯 Pilih Tahap Kuis Sesi {session + 1}</h2>
 
       <div className="grid grid-cols-1 gap-3 pt-1">
-        <button
+        {showDrawing && <button
           type="button"
           onClick={() => onStartMode('visual')}
           className={`py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-between gap-2 shadow-md transition-all active:scale-95 ${
@@ -50,6 +52,17 @@ export default function QuizStageMenu({
         >
           <span>👁️ {visualLabel}</span>
           {progress[session]?.visual ? <span className="text-xs bg-emerald-500/40 px-2 py-0.5 rounded-full">Selesai 5/5 ✓</span> : <span className="text-xs bg-indigo-500/40 px-2 py-0.5 rounded-full">Mulai</span>}
+        </button>}
+
+        <button
+          type="button"
+          onClick={() => onStartMode('drawing')}
+          className={`py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-between gap-2 shadow-md transition-all active:scale-95 ${
+            progress[session]?.drawing ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-slate-700 hover:bg-indigo-600'
+          }`}
+        >
+          <span>✍️ {drawingLabel}</span>
+          {progress[session]?.drawing ? <span className="text-xs bg-emerald-500/40 px-2 py-0.5 rounded-full">Selesai 5/5 ✓</span> : <span className="text-xs bg-indigo-500/40 px-2 py-0.5 rounded-full">Mulai</span>}
         </button>
 
         <button

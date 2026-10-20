@@ -1,13 +1,41 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import HiraganaModule from './HiraganaModule'
 import KatakanaModule from './KatakanaModule'
 import KanjiModule from './KanjiModule'
 import ConversationModule from './ConversationModule'
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import { readLearningOverview, recordLastModule } from '../lib/learningProgress'
+
+const moduleTitle = module => ({ hiragana: 'Bab 1: Hiragana Dasar', katakana: 'Bab 2: Katakana Dasar', kanji: 'Bab 3: Kanji Dasar', conversation: 'Bab 4: Percakapan & Kosakata' }[module] || 'Bab 1: Hiragana Dasar')
+const moduleIcon = module => ({ hiragana: 'あ', katakana: 'ア', kanji: '漢', conversation: '💬' }[module] || 'あ')
+
+function getLearnerName(user) {
+  const profileName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.user_metadata?.display_name
+  const emailName = user?.email?.split('@')[0]?.replace(/[._-]+/g, ' ')
+  const name = String(profileName || emailName || 'Detektif').trim()
+  return name.replace(/\b\p{L}/gu, letter => letter.toLocaleUpperCase('id-ID'))
+}
 
 export default function Dashboard({ session }) {
   const [currentView, setCurrentView] = useState('dashboard') // 'dashboard', 'hiragana', 'katakana', 'kanji', 'conversation'
+  const [overview, setOverview] = useState(() => readLearningOverview())
+  const learnerName = getLearnerName(session?.user)
+  const openModule = module => {
+    recordLastModule(module)
+    setOverview(readLearningOverview())
+    setCurrentView(module)
+  }
+  const goHome = () => {
+    setOverview(readLearningOverview())
+    setCurrentView('dashboard')
+  }
+
+  useEffect(() => {
+    const refreshOverview = () => setOverview(readLearningOverview())
+    window.addEventListener('focus', refreshOverview)
+    return () => window.removeEventListener('focus', refreshOverview)
+  }, [])
 
   // Hook untuk mendeteksi update PWA
   const {
@@ -86,86 +114,46 @@ export default function Dashboard({ session }) {
       {/* Main Content Router */}
       <div className="flex-1 flex flex-col">
         {currentView === 'hiragana' && (
-          <HiraganaModule onBack={() => setCurrentView('dashboard')} lang="id" />
+          <HiraganaModule onBack={goHome} lang="id" />
         )}
 
         {currentView === 'katakana' && (
-          <KatakanaModule onBack={() => setCurrentView('dashboard')} lang="id" />
+          <KatakanaModule onBack={goHome} lang="id" />
         )}
 
         {currentView === 'kanji' && (
-          <KanjiModule onBack={() => setCurrentView('dashboard')} lang="id" />
+          <KanjiModule onBack={goHome} lang="id" />
         )}
 
         {currentView === 'conversation' && (
-          <ConversationModule onBack={() => setCurrentView('dashboard')} lang="id" />
+          <ConversationModule onBack={goHome} lang="id" />
         )}
 
         {currentView === 'dashboard' && (
-          <main className="flex-1 p-8 max-w-4xl mx-auto w-full space-y-6">
-            <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl">
-              <h2 className="text-2xl font-bold mb-2">{t.welcome}</h2>
-              <p className="text-slate-400">{t.subtitle}</p>
-              <p className="mt-4 text-sm text-indigo-400 font-mono">Email: {session.user.email}</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Bab 1: Hiragana */}
-              <div 
-                onClick={() => setCurrentView('hiragana')}
-                className="bg-slate-800 p-6 rounded-2xl border border-indigo-500/50 hover:border-indigo-400 cursor-pointer transition shadow-lg group flex items-center gap-4"
-              >
-                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-500 shrink-0 bg-slate-700">
-                  <img src="/images/heiji.jpg" alt="Hattori Heiji" className="w-full h-full object-cover" />
+          <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8">
+            <section className="rounded-3xl border border-indigo-500/30 bg-gradient-to-br from-slate-800 to-slate-800/70 p-5 shadow-xl sm:p-7">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-indigo-300">Daily Progress Hub</p>
+              <h2 className="mt-2 text-2xl font-black sm:text-3xl">Hai, {learnerName}! 👋</h2>
+              <p className="mt-1 text-sm text-slate-400">{t.subtitle}</p>
+              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-orange-400/20 bg-slate-900/60 p-4">
+                  <p className="text-xs text-slate-400">Konsistensi belajar</p>
+                  <p className="mt-1 text-xl font-extrabold text-orange-300">Streak {overview.streak} hari 🔥</p>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold group-hover:text-indigo-300 transition">{t.bab1}</h3>
-                  <p className="text-xs text-slate-400 mt-1">{t.desc1}</p>
+                <div className="rounded-2xl border border-indigo-400/20 bg-slate-900/60 p-4">
+                  <div className="flex items-center justify-between gap-2"><p className="text-xs text-slate-400">Target harian</p><span className="text-xs font-bold text-indigo-200">{Math.max(0, overview.target - overview.practicedToday)} huruf lagi</span></div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-700"><div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all" style={{ width: `${Math.min(100, overview.practicedToday / overview.target * 100)}%` }}/></div>
+                  <p className="mt-1 text-[11px] text-slate-500">{Math.min(overview.practicedToday, overview.target)}/{overview.target} latihan hari ini</p>
                 </div>
               </div>
+            </section>
 
-              {/* Bab 2: Katakana */}
-              <div 
-                onClick={() => setCurrentView('katakana')}
-                className="bg-slate-800 p-6 rounded-2xl border border-indigo-500/50 hover:border-indigo-400 cursor-pointer transition shadow-lg group flex items-center gap-4"
-              >
-                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-500 shrink-0 bg-slate-700">
-                  <img src="/images/kid.jpg" alt="Kaito Kid" className="w-full h-full object-cover" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold group-hover:text-indigo-300 transition">{t.bab2}</h3>
-                  <p className="text-xs text-slate-400 mt-1">{t.desc2}</p>
-                </div>
-              </div>
+            <button onClick={() => openModule(overview.lastModule)} className="group rounded-3xl border border-violet-400/40 bg-gradient-to-r from-indigo-600 to-violet-700 p-5 text-left shadow-xl transition hover:-translate-y-0.5 hover:shadow-violet-900/40 sm:p-7">
+              <p className="text-xs font-bold uppercase tracking-widest text-indigo-100/80">Quick Continue</p>
+              <div className="mt-3 flex items-center justify-between gap-4"><div><h3 className="text-xl font-black sm:text-2xl">Lanjutkan {moduleTitle(overview.lastModule)} →</h3><p className="mt-1 text-sm text-indigo-100/80">Teruskan belajar dari modul terakhir yang dibuka</p></div><span className="text-4xl transition group-hover:translate-x-1">{moduleIcon(overview.lastModule)}</span></div>
+            </button>
 
-              {/* Bab 3: Kanji */}
-              <div 
-                onClick={() => setCurrentView('kanji')}
-                className="bg-slate-800 p-6 rounded-2xl border border-indigo-500/50 hover:border-indigo-400 cursor-pointer transition shadow-lg group flex items-center gap-4"
-              >
-                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-500 shrink-0 bg-slate-700">
-                  <img src="/images/kogoro.jpg" alt="Kogoro Mouri" className="w-full h-full object-cover" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold group-hover:text-indigo-300 transition">{t.bab3}</h3>
-                  <p className="text-xs text-slate-400 mt-1">{t.desc3}</p>
-                </div>
-              </div>
-
-              {/* Bab 4: Percakapan */}
-              <div 
-                onClick={() => setCurrentView('conversation')}
-                className="bg-slate-800 p-6 rounded-2xl border border-indigo-500/50 hover:border-indigo-400 cursor-pointer transition shadow-lg group flex items-center gap-4"
-              >
-                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-indigo-500 shrink-0 bg-slate-700">
-                  <img src="/images/agasa.jpg" alt="Profesor Agasa" className="w-full h-full object-cover" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold group-hover:text-indigo-300 transition">{t.bab4}</h3>
-                  <p className="text-xs text-slate-400 mt-1">{t.desc4}</p>
-                </div>
-              </div>
-            </div>
+            <p className="px-1 text-xs text-slate-500">Masuk sebagai {session.user.email}</p>
           </main>
         )}
       </div>
@@ -181,28 +169,28 @@ export default function Dashboard({ session }) {
             <span>Home</span>
           </button>
           <button 
-            onClick={() => setCurrentView('hiragana')}
+            onClick={() => openModule('hiragana')}
             className="flex flex-col items-center text-slate-400 hover:text-white text-xs font-semibold gap-1 transition"
           >
             <span className="text-lg">あ</span>
             <span>Hiragana</span>
           </button>
           <button 
-            onClick={() => setCurrentView('katakana')}
+            onClick={() => openModule('katakana')}
             className="flex flex-col items-center text-slate-400 hover:text-white text-xs font-semibold gap-1 transition"
           >
             <span className="text-lg">ア</span>
             <span>Katakana</span>
           </button>
           <button 
-            onClick={() => setCurrentView('kanji')}
+            onClick={() => openModule('kanji')}
             className="flex flex-col items-center text-slate-400 hover:text-white text-xs font-semibold gap-1 transition"
           >
             <span className="text-lg">漢字</span>
             <span>Kanji</span>
           </button>
           <button 
-            onClick={() => setCurrentView('conversation')}
+            onClick={() => openModule('conversation')}
             className="flex flex-col items-center text-slate-400 hover:text-white text-xs font-semibold gap-1 transition"
           >
             <span className="text-lg">💬</span>

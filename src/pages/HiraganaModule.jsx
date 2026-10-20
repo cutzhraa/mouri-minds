@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import StrokeOrderGuide from '../components/StrokeOrderGuide'
 import { getExpectedStrokeCount, validateStrokeOrder } from '../lib/strokeOrderValidation'
+import QuizStageMenu from '../components/QuizStageMenu'
+import QuizDrawingChallenge from '../components/QuizDrawingChallenge'
+import { recordLearning } from '../lib/learningProgress'
 
 export default function HiraganaModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -360,6 +363,7 @@ export default function HiraganaModule({ onBack }) {
   const isPassed = shuffledQuizList.length > 0 && quizScore === shuffledQuizList.length
 
   const handleAnswer = (selectedOpt) => {
+    recordLearning()
     const currentQuizItem = shuffledQuizList[quizIndex]
     const isCorrect = selectedOpt.id === currentQuizItem.id
     const newScore = isCorrect ? quizScore + 1 : quizScore
@@ -374,7 +378,7 @@ export default function HiraganaModule({ onBack }) {
       setQuizFinished(true)
       if (newScore === shuffledQuizList.length) {
         setQuizProgress(prev => {
-          const sessionData = prev[quizSession] || { visual: false, audio: false }
+          const sessionData = prev[quizSession] || { visual: false, audio: false, drawing: false }
           return {
             ...prev,
             [quizSession]: {
@@ -387,7 +391,21 @@ export default function HiraganaModule({ onBack }) {
     }
   }
 
-  const currentSessionProgress = quizProgress[quizSession] || { visual: false, audio: false }
+  const handleDrawingAnswer = () => {
+    recordLearning()
+    const newScore = quizScore + 1
+    setQuizScore(newScore)
+    if (quizIndex + 1 < shuffledQuizList.length) setQuizIndex(index => index + 1)
+    else {
+      setQuizFinished(true)
+      if (newScore === shuffledQuizList.length) setQuizProgress(prev => ({
+        ...prev,
+        [quizSession]: { ...(prev[quizSession] || { visual: false, audio: false, drawing: false }), drawing: true }
+      }))
+    }
+  }
+
+  const currentSessionProgress = quizProgress[quizSession] || { visual: false, audio: false, drawing: false }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-900 text-white overflow-y-auto select-none pb-24">
@@ -520,60 +538,15 @@ export default function HiraganaModule({ onBack }) {
           {activeTab === 'quiz' && (
             <div className="flex flex-col items-center justify-center w-full max-w-[360px]">
               {quizMode === null ? (
-                <div className="w-full bg-slate-800 border border-slate-700 p-6 rounded-2xl text-center space-y-4 shadow-xl">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs text-slate-400">
-                      <span className="font-bold text-white">Sesi Pembelajaran {quizSession + 1}</span>
-                      <span>{Math.ceil(vocabList.length / pageSize)} sesi</span>
-                    </div>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {Array.from({ length: Math.ceil(vocabList.length / pageSize) }, (_, session) => (
-                        <button key={session} onClick={() => { setQuizSession(session); setQuizFinished(false); setQuizScore(0); setQuizIndex(0) }} className={`min-w-10 rounded-lg px-3 py-2 text-xs font-bold ${session === quizSession ? 'bg-violet-600 text-white' : (quizProgress[session]?.visual || quizProgress[session]?.audio) ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-700 text-slate-300'}`}>
-                          {session + 1}{quizProgress[session]?.visual || quizProgress[session]?.audio ? ' ✓' : ''}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <h2 className="text-base font-bold text-white">🎯 Pilih Tahap Kuis Sesi {quizSession + 1}</h2>
-                  
-                  <div className="grid grid-cols-1 gap-3 pt-2">
-                    <button 
-                      onClick={() => { setQuizMode('visual'); setQuizFinished(false); setQuizScore(0); setQuizIndex(0); }} 
-                      className={`py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-between gap-2 shadow-md transition-all active:scale-95 ${
-                        currentSessionProgress.visual ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-slate-700 hover:bg-indigo-600'
-                      }`}
-                    >
-                      <span>1. 👁️ Mode Visual (Tebak Romaji)</span>
-                      {currentSessionProgress.visual ? (
-                        <span className="text-xs bg-emerald-500/40 px-2 py-0.5 rounded-full">Selesai 5/5 ✓</span>
-                      ) : (
-                        <span className="text-xs bg-indigo-500/40 px-2 py-0.5 rounded-full">Mulai</span>
-                      )}
-                    </button>
-
-                    <button 
-                      onClick={() => { setQuizMode('audio'); setQuizFinished(false); setQuizScore(0); setQuizIndex(0); }} 
-                      className={`py-3.5 px-4 rounded-xl font-bold text-sm text-white flex items-center justify-between gap-2 shadow-md transition-all active:scale-95 ${
-                        currentSessionProgress.audio 
-                            ? 'bg-emerald-700 hover:bg-emerald-600' 
-                            : 'bg-slate-700 hover:bg-indigo-600'
-                      }`}
-                    >
-                      <span>2. 🎧 Mode Audio (Tebak Suara)</span>
-                      {currentSessionProgress.audio ? (
-                        <span className="text-xs bg-emerald-500/40 px-2 py-0.5 rounded-full">Selesai 5/5 ✓</span>
-                      ) : (
-                        <span className="text-xs bg-indigo-500/40 px-2 py-0.5 rounded-full">Mulai</span>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                <QuizStageMenu session={quizSession} sessionCount={Math.ceil(vocabList.length / pageSize)} progress={quizProgress}
+                  onSelectSession={session => { setQuizSession(session); setQuizFinished(false); setQuizScore(0); setQuizIndex(0) }}
+                  onStartMode={mode => { setQuizMode(mode); setQuizFinished(false); setQuizScore(0); setQuizIndex(0) }}
+                  visualLabel="Mode Visual (Tebak Romaji)" audioLabel="Mode Audio (Tebak Suara)" drawingLabel="Kuis Tulis (Drawing Challenge)" showDrawing />
               ) : !quizFinished ? (
                 <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4 shadow-xl">
                   <div className="flex justify-between items-center text-xs text-slate-400">
                     <button onClick={() => setQuizMode(null)} className="text-indigo-400 hover:underline">← Kembali ke Menu Tahap</button>
-                    <span>Sesi {quizSession+1} [{quizMode === 'visual' ? 'Romaji' : 'Audio'}] • {quizIndex+1}/{shuffledQuizList.length}</span>
+                    <span>Sesi {quizSession+1} [{quizMode === 'visual' ? 'Romaji' : quizMode === 'audio' ? 'Audio' : 'Tulis'}] • {quizIndex+1}/{shuffledQuizList.length}</span>
                   </div>
 
                   {quizMode === 'visual' ? (
@@ -586,7 +559,7 @@ export default function HiraganaModule({ onBack }) {
                         ))}
                       </div>
                     </div>
-                  ) : (
+                  ) : quizMode === 'audio' ? (
                     <div className="space-y-3">
                       <div className="flex flex-col items-center justify-center py-6 bg-slate-900/80 border border-slate-700/80 rounded-xl space-y-3">
                         <button 
@@ -607,7 +580,7 @@ export default function HiraganaModule({ onBack }) {
                         ))}
                       </div>
                     </div>
-                  )}
+                  ) : <QuizDrawingChallenge key={`hiragana-${quizSession}-${quizIndex}`} item={shuffledQuizList[quizIndex]} onAnswer={handleDrawingAnswer} />}
                 </div>
               ) : (
                 <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl text-center space-y-3 shadow-xl">
@@ -616,7 +589,7 @@ export default function HiraganaModule({ onBack }) {
                   
                   {isPassed ? (
                     <div className="space-y-2">
-                      <p className="text-xs text-emerald-300 font-semibold">Sempurna! Tahap {quizMode === 'visual' ? 'Romaji' : 'Tebak Suara'} Sesi {quizSession+1} Berhasil Dituntaskan.</p>
+                      <p className="text-xs text-emerald-300 font-semibold">Sempurna! Tahap {quizMode === 'visual' ? 'Romaji' : quizMode === 'audio' ? 'Tebak Suara' : 'Kuis Tulis'} Sesi {quizSession+1} Berhasil Dituntaskan.</p>
                       
                       <button
                         onClick={() => { setQuizFinished(false); setQuizScore(0); setQuizIndex(0); setQuizMode(null); }}

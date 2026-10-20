@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase'
 import StrokeOrderGuide from '../components/StrokeOrderGuide'
 import QuizStageMenu from '../components/QuizStageMenu'
 import { getExpectedStrokeCount, validateStrokeOrder } from '../lib/strokeOrderValidation'
+import QuizDrawingChallenge from '../components/QuizDrawingChallenge'
+import { recordLearning } from '../lib/learningProgress'
 
 export default function KatakanaModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -219,6 +221,7 @@ export default function KatakanaModule({ onBack }) {
   const currentStrokeCount = Math.min(strokeCount, targetStrokes)
   const isPassed = shuffledQuizList.length > 0 && quizScore === shuffledQuizList.length
   const handleAnswer = (selectedOpt) => {
+    recordLearning()
     const cur = shuffledQuizList[quizIndex]
     const correct = selectedOpt.id === cur.id
     const nextScore = quizScore + (correct ? 1 : 0)
@@ -226,7 +229,18 @@ export default function KatakanaModule({ onBack }) {
     if (quizIndex + 1 < shuffledQuizList.length) setQuizIndex(p=>p+1)
     else {
       setQuizFinished(true)
-      if (nextScore === shuffledQuizList.length) setQuizProgress(prev => ({ ...prev, [quizSession]: { ...(prev[quizSession] || { visual: false, audio: false }), [quizMode]: true } }))
+      if (nextScore === shuffledQuizList.length) setQuizProgress(prev => ({ ...prev, [quizSession]: { ...(prev[quizSession] || { visual: false, audio: false, drawing: false }), [quizMode]: true } }))
+    }
+  }
+
+  const handleDrawingAnswer = () => {
+    recordLearning()
+    const nextScore = quizScore + 1
+    setQuizScore(nextScore)
+    if (quizIndex + 1 < shuffledQuizList.length) setQuizIndex(index => index + 1)
+    else {
+      setQuizFinished(true)
+      if (nextScore === shuffledQuizList.length) setQuizProgress(prev => ({ ...prev, [quizSession]: { ...(prev[quizSession] || { visual: false, audio: false, drawing: false }), drawing: true } }))
     }
   }
 
@@ -285,15 +299,17 @@ export default function KatakanaModule({ onBack }) {
                 }}
                 visualLabel="Mode Visual (Tebak Romaji)"
                 audioLabel="Mode Audio (Tebak Suara)"
+                drawingLabel="Kuis Tulis (Drawing Challenge)"
+                showDrawing
               />
             ) : !quizFinished ? (
               <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl space-y-4">
                 <div className="flex justify-between text-xs text-slate-400"><button onClick={() => setQuizMode(null)} className="text-indigo-400"> ← Ganti Mode</button><span>Sesi {quizSession+1}  {quizIndex+1}/{shuffledQuizList.length}</span></div>
                 {quizMode === 'visual' ? (
                   <div className="space-y-3"><div className="text-center"><p className="text-xs text-slate-400">Pilih romaji:</p><div className="text-6xl font-extrabold my-2">{shuffledQuizList[quizIndex]?.hiragana}</div></div><div className="grid grid-cols-2 gap-2">{shuffledOptions.map((opt,i)=><button key={i} onClick={()=>handleAnswer(opt)} className="py-3 bg-slate-700 hover:bg-indigo-600 rounded-xl font-bold text-sm">{opt.romaji}</button>)}</div></div>
-                ) : (
+                ) : quizMode === 'audio' ? (
                   <div className="space-y-3"><div className="flex flex-col items-center py-6 bg-slate-900/80 border border-slate-700/80 rounded-xl space-y-3"><button onClick={()=>speakJapanese(shuffledQuizList[quizIndex].hiragana)} className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center text-2xl">🔊</button><p className="text-xs text-slate-300">Putar Rekaman Suara</p></div><div className="grid grid-cols-2 gap-2.5">{shuffledOptions.map((opt,i)=><button key={i} onClick={()=>handleAnswer(opt)} className="py-4 bg-slate-700 hover:bg-indigo-600 rounded-xl font-black text-xl">{opt.hiragana}</button>)}</div></div>
-                )}
+                ) : <QuizDrawingChallenge key={`katakana-${quizSession}-${quizIndex}`} item={shuffledQuizList[quizIndex]} onAnswer={handleDrawingAnswer} />}
               </div>
             ) : (
               <div className="w-full bg-slate-800 border border-slate-700 p-5 rounded-2xl text-center space-y-3"><h2 className="text-xl font-bold text-emerald-400">Kuis Selesai! 🎉</h2><div className="text-3xl font-black text-indigo-400">{quizScore}/{shuffledQuizList.length}</div>{isPassed ? <button onClick={()=>{setQuizMode(null);setQuizFinished(false);setQuizScore(0);setQuizIndex(0)}} className="w-full py-3 bg-emerald-600 rounded-xl text-sm font-bold">Kembali ke Menu Kuis</button> : <button onClick={()=>{setQuizFinished(false);setQuizScore(0);setQuizIndex(0);setQuizMode(null)}} className="w-full py-3 bg-indigo-600 rounded-xl text-sm font-bold">Ulangi Kuis 🔄</button>}</div>
