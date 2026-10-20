@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import StrokeOrderGuide from '../components/StrokeOrderGuide'
 import QuizStageMenu from '../components/QuizStageMenu'
 import { getExpectedStrokeCount, getStrokeNumberGroups, validateStrokeOrder } from '../lib/strokeOrderValidation'
+import { playSugoiEffect } from '../lib/speechEffects'
 
 export default function KanjiModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -297,6 +298,7 @@ export default function KanjiModule({ onBack }) {
     const passed = await validateStrokeOrder(currentLetter, strokePathsRef.current).catch(() => false)
     setAnalysisResult({ passed })
     if (!passed) return
+    playSugoiEffect()
 
     finishTimeoutRef.current = setTimeout(() => {
       setAnalysisResult(null)

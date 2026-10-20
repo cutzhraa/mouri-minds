@@ -5,6 +5,7 @@ import { getExpectedStrokeCount, validateStrokeOrder } from '../lib/strokeOrderV
 import QuizStageMenu from '../components/QuizStageMenu'
 import QuizDrawingChallenge from '../components/QuizDrawingChallenge'
 import { recordLearning } from '../lib/learningProgress'
+import { playFailureEffect, playSugoiEffect } from '../lib/speechEffects'
 
 export default function HiraganaModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -343,7 +344,17 @@ export default function HiraganaModule({ onBack }) {
 
     const passed = await validateStrokeOrder(currentLetter, strokePathsRef.current).catch(() => false)
     setAnalysisResult({ passed })
-    if (!passed) return
+    if (!passed) {
+      playFailureEffect()
+      finishTimeoutRef.current = setTimeout(() => {
+        setAnalysisResult(null)
+        setStrokeCount(0)
+        strokePathsRef.current = []
+        drawGuide()
+      }, 800)
+      return
+    }
+    playSugoiEffect()
 
     finishTimeoutRef.current = setTimeout(() => {
       setAnalysisResult(null)

@@ -5,6 +5,7 @@ import QuizStageMenu from '../components/QuizStageMenu'
 import { getExpectedStrokeCount, validateStrokeOrder } from '../lib/strokeOrderValidation'
 import QuizDrawingChallenge from '../components/QuizDrawingChallenge'
 import { recordLearning } from '../lib/learningProgress'
+import { playSugoiEffect } from '../lib/speechEffects'
 
 export default function KatakanaModule({ onBack }) {
   const [vocabList, setVocabList] = useState([])
@@ -208,6 +209,7 @@ export default function KatakanaModule({ onBack }) {
     }
 
     setAnalysisResult({ passed: true })
+    playSugoiEffect()
     finishTimeoutRef.current = setTimeout(() => {
       setAnalysisResult(null); setStrokeCount(0); strokePathsRef.current=[]; setActiveTab('flashcard')
     }, 1000)
