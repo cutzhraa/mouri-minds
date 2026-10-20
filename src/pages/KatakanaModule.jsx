@@ -73,20 +73,22 @@ export default function KatakanaModule({ onBack }) {
   }
   
   const handleNextCard = () => {
+    if (currentIndex >= vocabList.length - 1) return
     setIsFlipped(false); setAnalysisResult(null); setStrokeCount(0); strokePathsRef.current=[]
     setSlideDirection('-translate-x-full opacity-0 scale-95')
     setTimeout(() => {
-      const n = (currentIndex + 1) % vocabList.length
+      const n = currentIndex + 1
       setCurrentIndex(n); speakJapanese(vocabList[n]?.hiragana)
       setSlideDirection('translate-x-full opacity-0 scale-95')
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)
     }, 150)
   }
   const handlePrevCard = () => {
+    if (currentIndex <= 0) return
     setIsFlipped(false); setAnalysisResult(null); setStrokeCount(0); strokePathsRef.current=[]
     setSlideDirection('-translate-x-full opacity-0 scale-95')
     setTimeout(() => {
-      const p = (currentIndex - 1 + vocabList.length) % vocabList.length
+      const p = currentIndex - 1
       setCurrentIndex(p); speakJapanese(vocabList[p]?.hiragana)
       setSlideDirection('translate-x-full opacity-0 scale-95')
       setTimeout(() => setSlideDirection('translate-x-0 opacity-100 scale-100'), 50)

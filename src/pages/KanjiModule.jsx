@@ -99,12 +99,13 @@ export default function KanjiModule({ onBack }) {
   }
   
   const handleNextCard = () => {
+    if (currentIndex >= vocabList.length - 1) return
     setIsFlipped(false)
     setAnalysisResult(null)
     setStrokeCount(0)
     setSlideDirection('-translate-x-full opacity-0 scale-95')
     setTimeout(() => {
-      const n = (currentIndex + 1) % vocabList.length
+      const n = currentIndex + 1
       setCurrentIndex(n)
       const readings = vocabList[n]?.romaji?.split('/').map(r => r.trim()) || []
       speakJapanese(readings[0] || vocabList[n]?.hiragana)
@@ -114,12 +115,13 @@ export default function KanjiModule({ onBack }) {
   }
   
   const handlePrevCard = () => {
+    if (currentIndex <= 0) return
     setIsFlipped(false)
     setAnalysisResult(null)
     setStrokeCount(0)
     setSlideDirection('-translate-x-full opacity-0 scale-95')
     setTimeout(() => {
-      const p = (currentIndex - 1 + vocabList.length) % vocabList.length
+      const p = currentIndex - 1
       setCurrentIndex(p)
       const readings = vocabList[p]?.romaji?.split('/').map(r => r.trim()) || []
       speakJapanese(readings[0] || vocabList[p]?.hiragana)
