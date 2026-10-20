@@ -1,62 +1,83 @@
 # 🕵️‍♂️ Mouri Minds
+
 **A Progressive Web App (PWA) ala detektif untuk menaklukkan bahasa Jepang.**
 
-Belajar Hiragana, Katakana, Kanji, dan Percakapan + Furigana dengan cara yang seru, interaktif, dan gak ngebosenin! Flashcard swipe, latihan kuas, dan kuis sesi bertahap.
+Belajar Hiragana, Katakana, Kanji, serta percakapan dan kosakata dengan cara yang interaktif. Tersedia flashcard swipe, latihan kuas, dan kuis bertahap.
 
-![React](https://img.shields.io/badge/React-19-blue) ![Tailwind](https://img.shields.io/badge/Tailwind-3-38bdf8) ![Vite](https://img.shields.io/badge/Vite-5-purple) ![Supabase](https://img.shields.io/badge/Supabase-DB-green) ![PWA](https://img.shields.io/badge/PWA-Ready-yellow)
+![React](https://img.shields.io/badge/React-19-blue) ![Tailwind](https://img.shields.io/badge/Tailwind-3-38bdf8) ![Vite](https://img.shields.io/badge/Vite-8-purple) ![Supabase](https://img.shields.io/badge/Supabase-DB-green) ![PWA](https://img.shields.io/badge/PWA-Ready-yellow)
 
-🔗 **Live Demo:** https://mouri-minds.vercel.app
+🔗 **Live Demo:** [https://mouri-minds.vercel.app](https://mouri-minds.vercel.app/)
 
-### ✨ Key Features
-- **📚 Flashcard Detective Flip:** Animasi flip 3D, swipe gesture di HP, indikator kartu, auto-bunyi `ja-JP`
-- **✍️ Latihan Kuas + Stroke Order:** Canvas HTML5 dengan panduan garis putus-putus + badge ①②③ urutan goresan
-- **🔬 Percakapan + Furigana:** Kalimat asli campur Hiragana/Katakana/Kanji dipecah jadi chip `お | o` `げんき | genki` biar gampang hafal
-- **⚡ Kuis Sesi Bertahap:** Sistem 5 soal per sesi, harus lulus 80% baru buka sesi berikutnya + Badge System
-- **🔊 Audio Native:** Web Speech API (ja-JP) cepat & lambat
-- **📱 PWA Installable:** Bisa di-install ke layar utama Android/iOS, ikon custom `conan.png`
+## ✨ Key Features
 
-### 🛠️ Tech Stack
-- Frontend: React.js + Vite
-- Styling: Tailwind CSS
-- Backend & DB: Supabase (`vocabulary` table with category: Hiragana, Katakana, Kanji, Conversation)
-- PWA: `manifest.json` + Service Worker
-- API: Web Speech API, Canvas API, Touch Events
+- **📚 Flashcard Detective Flip:** animasi flip, swipe gesture di HP, indikator kartu, dan pelafalan `ja-JP`.
+- **✍️ Latihan Kuas + Stroke Order:** canvas HTML5, panduan urutan guratan, dan nomor guratan.
+- **🔬 Percakapan + Furigana:** belajar kalimat dan kosakata percakapan Jepang.
+- **⚡ Kuis Sesi Bertahap:** lima soal per sesi. Nilai 5/5 menandai tahap selesai; sesi dapat dipilih tanpa dikunci.
+- **📝 Kuis Tulis:** Hiragana dan Katakana menyediakan tahap kuis menggambar karakter dengan validasi urutan guratan.
+- **🏠 Daily Progress Hub:** ringkasan streak, target latihan harian, dan tombol untuk membuka modul terakhir.
+- **🔊 Audio Native:** pelafalan menggunakan Web Speech API (`ja-JP`); suara yang tersedia bergantung pada browser dan perangkat.
+- **📱 PWA Installable:** dapat dipasang pada perangkat yang mendukung PWA, dengan ikon dari `public/images/conan.png`.
 
-### 🚀 Getting Started
+## 🛠️ Tech Stack
 
-#### 1. Jalankan Lokal
+- Frontend: React 19 + Vite 8
+- Styling: Tailwind CSS 3
+- Backend & DB: Supabase (`vocabulary` table dengan kategori Hiragana, Katakana, Kanji, dan Conversation)
+- PWA: `vite-plugin-pwa`, manifest, dan service worker
+- API: Web Speech API, Canvas API, dan Touch Events
+
+## 🚀 Getting Started
+
+### 1. Jalankan Lokal
+
+Pastikan Node.js dan npm sudah terpasang.
+
 ```bash
-git clone https://github.com/username/mouri-minds.git
+git clone https://github.com/cutzhraa/mouri-minds.git
 cd mouri-minds
 npm install
-
-# buat file .env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_anon_key
-
 npm run dev
-#### 2. PWA Icon Setup
-Pastikan file ikon ada di `public/`:
-- `public/icon-192.png`
-- `public/icon-512.png`
-Convert dari `public/images/conan.png` ke PNG biar gak kepotong pas `maskable`.
+```
 
-#### 3. Deploy ke Vercel (PWA Live)
+Konfigurasi koneksi Supabase berada di `src/lib/supabase.js`. Sesuaikan URL proyek serta anon/publishable key jika menggunakan proyek Supabase sendiri. Jangan gunakan service role key pada frontend.
 
-> *PENTING - Cara Login Vercel:*
-> Kalo belum punya akun, daftar dulu di Vercel.com pakai *email asli yang aktif*. Vercel bakal kirim email verifikasi dulu, kalo belum di-verif kamu gak bakal bisa login & deploy. Cek inbox/spam folder.
+Perintah tambahan:
 
-1. Push repo ke GitHub
-2. Login Vercel (sudah verif email)
-3. Add New Project > Import `mouri-minds`
-4. Vercel auto-detect Vite > Klik Deploy
-5. Jadi! Link kamu `xxx.vercel.app`
+```bash
+npm run build    # Membuat build produksi di dist/
+npm run preview  # Menjalankan preview build produksi
+npm run lint     # Menjalankan ESLint
+```
 
-### 📂 Struktur Supabase
-Table: `vocabulary`
-- `hiragana` (text) : `あ` atau `おげんきですか`
-- `romaji` (text) : `a` atau `o genki desu ka` (wajib pakai spasi buat furigana)
-- `meaning_id` (text) : arti Indonesia
-- `category` : `Hiragana` / `Katakana` / `Kanji` / `Conversation`
+### 2. PWA Icon Setup
 
+Ikon PWA dikonfigurasi di `vite.config.js` dan menggunakan `public/images/conan.png` untuk ukuran 192×192 dan 512×512. Jika mengganti ikon, gunakan gambar PNG persegi dengan resolusi yang memadai dan perbarui konfigurasi manifest di file tersebut.
+
+### 3. Deploy ke Vercel (PWA Live)
+
+1. Push repository ke GitHub.
+2. Login ke Vercel dan pilih **Add New Project**.
+3. Import repository `mouri-minds`.
+4. Pastikan konfigurasi Supabase di `src/lib/supabase.js` sesuai untuk deployment.
+5. Deploy. Vercel akan mendeteksi Vite dan membangun aplikasi.
+
+### 4. Struktur Supabase
+
+Aplikasi membaca tabel `vocabulary` dan memfilter berdasarkan kolom `category`:
+
+| Kolom | Tipe | Keterangan |
+| --- | --- | --- |
+| `id` | integer/uuid | ID unik setiap data; digunakan untuk urutan serta jawaban kuis |
+| `hiragana` | text | Karakter atau kalimat Jepang, misalnya `あ` atau `おげんきですか` |
+| `romaji` | text | Cara baca latin; data percakapan menggunakan pemisah yang sesuai dengan format furigana aplikasi |
+| `meaning_id` | text | Arti bahasa Indonesia |
+| `meaning_en` | text | Arti bahasa Inggris (opsional untuk sejumlah tampilan) |
+| `category` | text | `Hiragana`, `Katakana`, `Kanji`, atau `Conversation` |
+
+## 📈 Progres dan Reset Kuis
+
+Progres tahap dan sesi kuis disimpan di `localStorage` browser/perangkat. Progres kuis tidak otomatis ter-reset setiap hari. Sesi dapat dipilih bebas; kelulusan tahap dicatat saat mendapat nilai 5/5.
+
+Dashboard menghitung streak dan target harian berdasarkan tanggal latihan. Saat ini aktivitas kuis dan latihan tulis Hiragana/Katakana yang memperbarui hitungan tersebut.
 ---
